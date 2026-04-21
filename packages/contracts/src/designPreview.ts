@@ -23,6 +23,8 @@ export type DesignPreviewEntry = typeof DesignPreviewEntry.Type;
 
 export const DesignPreviewListResult = Schema.Struct({
   entries: Schema.Array(DesignPreviewEntry),
+  resolvedAbsolutePath: Schema.optional(Schema.String),
+  rootExists: Schema.optional(Schema.Boolean),
 });
 export type DesignPreviewListResult = typeof DesignPreviewListResult.Type;
 

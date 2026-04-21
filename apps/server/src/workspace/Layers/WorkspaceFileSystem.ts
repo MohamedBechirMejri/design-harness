@@ -93,7 +93,11 @@ export const makeWorkspaceFileSystem = Effect.gen(function* () {
       ),
     );
     if (!exists) {
-      return [] as ReadonlyArray<DesignPreviewEntry>;
+      return {
+        entries: [] as ReadonlyArray<DesignPreviewEntry>,
+        resolvedAbsolutePath: designRoot,
+        rootExists: false,
+      };
     }
 
     const walk = (dir: string): Effect.Effect<DesignPreviewEntry[], WorkspaceFileSystemError> =>
@@ -148,7 +152,11 @@ export const makeWorkspaceFileSystem = Effect.gen(function* () {
       if (a.modifiedAtMs !== b.modifiedAtMs) return b.modifiedAtMs - a.modifiedAtMs;
       return a.relativePath.localeCompare(b.relativePath);
     });
-    return entries;
+    return {
+      entries,
+      resolvedAbsolutePath: designRoot,
+      rootExists: true,
+    };
   });
 
   const readDesignFile: WorkspaceFileSystemShape["readDesignFile"] = Effect.fn(

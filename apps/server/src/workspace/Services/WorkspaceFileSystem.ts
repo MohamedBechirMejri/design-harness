@@ -52,9 +52,14 @@ export interface WorkspaceFileSystemShape {
    *
    * Returns an empty list if the directory does not exist yet.
    */
-  readonly listDesignFiles: (
-    input: DesignPreviewListInput,
-  ) => Effect.Effect<ReadonlyArray<DesignPreviewEntry>, WorkspaceFileSystemError>;
+  readonly listDesignFiles: (input: DesignPreviewListInput) => Effect.Effect<
+    {
+      readonly entries: ReadonlyArray<DesignPreviewEntry>;
+      readonly resolvedAbsolutePath: string;
+      readonly rootExists: boolean;
+    },
+    WorkspaceFileSystemError
+  >;
 
   /**
    * Read a single file under `.t3code/design/<threadId>/` as text.

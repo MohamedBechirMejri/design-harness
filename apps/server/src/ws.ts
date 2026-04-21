@@ -825,7 +825,6 @@ const makeWsRpcLayer = (currentSessionId: AuthSessionId) =>
           observeRpcEffect(
             WS_METHODS.designPreviewList,
             workspaceFileSystem.listDesignFiles(input).pipe(
-              Effect.map((entries) => ({ entries })),
               Effect.mapError(
                 (cause) =>
                   new DesignPreviewError({

@@ -108,6 +108,8 @@ const DesignPreviewSidebar = memo(function DesignPreviewSidebar({
   });
 
   const entries = listQuery.data?.entries ?? EMPTY_ENTRIES;
+  const resolvedAbsolutePath = listQuery.data?.resolvedAbsolutePath;
+  const rootExists = listQuery.data?.rootExists;
   const htmlEntries = useMemo(
     () => entries.filter((entry) => isHtmlFile(entry.relativePath)),
     [entries],
@@ -233,16 +235,28 @@ const DesignPreviewSidebar = memo(function DesignPreviewSidebar({
                   </div>
                 ) : (
                   <div className="px-2 py-4 text-left text-xs text-muted-foreground/60">
-                    <div>No design files here yet.</div>
-                    {workspaceRoot ? (
+                    <div>
+                      {rootExists === false
+                        ? "Design folder doesn't exist yet."
+                        : "No design files here yet."}
+                    </div>
+                    {resolvedAbsolutePath ? (
+                      <div
+                        className="mt-2 break-all text-[10px] text-muted-foreground/40"
+                        title={resolvedAbsolutePath}
+                      >
+                        <div>Looking in:</div>
+                        <div className="mt-0.5 text-muted-foreground/70">
+                          {resolvedAbsolutePath}
+                        </div>
+                      </div>
+                    ) : workspaceRoot ? (
                       <div
                         className="mt-2 break-all text-[10px] text-muted-foreground/40"
                         title={`${workspaceRoot}/.t3code/design/${threadId}`}
                       >
                         Looking in{" "}
-                        <span className="text-muted-foreground/60">
-                          .t3code/design/{threadId}
-                        </span>
+                        <span className="text-muted-foreground/60">.t3code/design/{threadId}</span>
                       </div>
                     ) : null}
                   </div>
