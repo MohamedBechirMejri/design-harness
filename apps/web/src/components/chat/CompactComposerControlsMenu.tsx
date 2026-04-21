@@ -19,8 +19,10 @@ export const CompactComposerControlsMenu = memo(function CompactComposerControls
   planSidebarOpen: boolean;
   runtimeMode: RuntimeMode;
   showInteractionModeToggle: boolean;
+  showDesignModeToggle?: boolean;
   traitsMenuContent?: ReactNode;
   onToggleInteractionMode: () => void;
+  onToggleDesignMode?: () => void;
   onTogglePlanSidebar: () => void;
   onRuntimeModeChange: (mode: RuntimeMode) => void;
 }) {
@@ -52,11 +54,21 @@ export const CompactComposerControlsMenu = memo(function CompactComposerControls
               value={props.interactionMode}
               onValueChange={(value) => {
                 if (!value || value === props.interactionMode) return;
+                if (value === "design") {
+                  props.onToggleDesignMode?.();
+                  return;
+                }
+                // Toggle handles switching between plan <-> default.
+                // Also handles design -> plan/default by toggling off design first
+                // (the ChatView handler normalizes intermediate states).
                 props.onToggleInteractionMode();
               }}
             >
               <MenuRadioItem value="default">Chat</MenuRadioItem>
               <MenuRadioItem value="plan">Plan</MenuRadioItem>
+              {props.showDesignModeToggle ? (
+                <MenuRadioItem value="design">Design</MenuRadioItem>
+              ) : null}
             </MenuRadioGroup>
             <MenuDivider />
           </>

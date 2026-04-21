@@ -30,6 +30,7 @@ import {
   CODEX_DEFAULT_MODE_DEVELOPER_INSTRUCTIONS,
   CODEX_PLAN_MODE_DEVELOPER_INSTRUCTIONS,
 } from "../CodexDeveloperInstructions.ts";
+import { renderDesignModeInstructions } from "../DesignModeInstructions.ts";
 
 const PROVIDER = "codex" as const;
 
@@ -294,8 +295,32 @@ function runtimeModeToTurnSandboxPolicy(
   }
 }
 
+function resolveCodexDeveloperInstructions(input: {
+  readonly interactionMode: ProviderInteractionMode;
+  readonly threadId: string;
+}): string {
+  switch (input.interactionMode) {
+    case "plan":
+      return CODEX_PLAN_MODE_DEVELOPER_INSTRUCTIONS;
+    case "design":
+      return renderDesignModeInstructions({ threadId: input.threadId });
+    case "default":
+      return CODEX_DEFAULT_MODE_DEVELOPER_INSTRUCTIONS;
+  }
+}
+
+// Codex's RPC mode kind is limited to "plan" | "default". Our extended
+// interaction modes (currently "design") ride on "default" and rely on
+// developer instructions to drive behavior.
+function toCodexModeKind(
+  mode: ProviderInteractionMode,
+): EffectCodexSchema.V2TurnStartParams__ModeKind {
+  return mode === "plan" ? "plan" : "default";
+}
+
 function buildCodexCollaborationMode(input: {
   readonly interactionMode?: ProviderInteractionMode;
+  readonly threadId: string;
   readonly model?: string;
   readonly effort?: EffectCodexSchema.V2TurnStartParams__ReasoningEffort;
 }): EffectCodexSchema.V2TurnStartParams__CollaborationMode | undefined {
@@ -304,14 +329,14 @@ function buildCodexCollaborationMode(input: {
   }
   const model = normalizeCodexModelSlug(input.model) ?? DEFAULT_MODEL_BY_PROVIDER.codex;
   return {
-    mode: input.interactionMode,
+    mode: toCodexModeKind(input.interactionMode),
     settings: {
       model,
       reasoning_effort: input.effort ?? "medium",
-      developer_instructions:
-        input.interactionMode === "plan"
-          ? CODEX_PLAN_MODE_DEVELOPER_INSTRUCTIONS
-          : CODEX_DEFAULT_MODE_DEVELOPER_INSTRUCTIONS,
+      developer_instructions: resolveCodexDeveloperInstructions({
+        interactionMode: input.interactionMode,
+        threadId: input.threadId,
+      }),
     },
   };
 }
@@ -342,6 +367,7 @@ export function buildTurnStartParams(input: {
 
   const config = runtimeModeToThreadConfig(input.runtimeMode);
   const collaborationMode = buildCodexCollaborationMode({
+    threadId: input.threadId,
     ...(input.interactionMode ? { interactionMode: input.interactionMode } : {}),
     ...(input.model ? { model: input.model } : {}),
     ...(input.effort ? { effort: input.effort } : {}),

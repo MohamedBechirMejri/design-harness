@@ -92,6 +92,7 @@ import {
   type LucideIcon,
   LockIcon,
   LockOpenIcon,
+  PaletteIcon,
   PenLineIcon,
   XIcon,
 } from "lucide-react";
@@ -162,12 +163,14 @@ const terminalContextIdListsEqual = (
 
 const ComposerFooterModeControls = memo(function ComposerFooterModeControls(props: {
   showInteractionModeToggle: boolean;
+  showDesignModeToggle: boolean;
   interactionMode: ProviderInteractionMode;
   runtimeMode: RuntimeMode;
   showPlanToggle: boolean;
   planSidebarLabel: string;
   planSidebarOpen: boolean;
   onToggleInteractionMode: () => void;
+  onToggleDesignMode: () => void;
   onRuntimeModeChange: (mode: RuntimeMode) => void;
   onTogglePlanSidebar: () => void;
 }) {
@@ -182,14 +185,19 @@ const ComposerFooterModeControls = memo(function ComposerFooterModeControls(prop
         <>
           <Button
             variant="ghost"
-            className="shrink-0 whitespace-nowrap px-2 text-muted-foreground/70 hover:text-foreground/80 sm:px-3"
+            className={cn(
+              "shrink-0 whitespace-nowrap px-2 sm:px-3",
+              props.interactionMode === "plan"
+                ? "text-blue-400 hover:text-blue-300"
+                : "text-muted-foreground/70 hover:text-foreground/80",
+            )}
             size="sm"
             type="button"
             onClick={props.onToggleInteractionMode}
             title={
               props.interactionMode === "plan"
                 ? "Plan mode — click to return to normal build mode"
-                : "Default mode — click to enter plan mode"
+                : "Click to enter plan mode"
             }
           >
             <BotIcon />
@@ -197,6 +205,29 @@ const ComposerFooterModeControls = memo(function ComposerFooterModeControls(prop
               {props.interactionMode === "plan" ? "Plan" : "Build"}
             </span>
           </Button>
+
+          {props.showDesignModeToggle ? (
+            <Button
+              variant="ghost"
+              className={cn(
+                "shrink-0 whitespace-nowrap px-2 sm:px-3",
+                props.interactionMode === "design"
+                  ? "text-pink-400 hover:text-pink-300"
+                  : "text-muted-foreground/70 hover:text-foreground/80",
+              )}
+              size="sm"
+              type="button"
+              onClick={props.onToggleDesignMode}
+              title={
+                props.interactionMode === "design"
+                  ? "Design mode — click to return to normal build mode"
+                  : "Click to enter design mode"
+              }
+            >
+              <PaletteIcon />
+              <span className="sr-only sm:not-sr-only">Design</span>
+            </Button>
+          ) : null}
 
           <Separator orientation="vertical" className="mx-0.5 hidden h-4 sm:block" />
         </>
@@ -448,6 +479,7 @@ export interface ChatComposerProps {
 
   onProviderModelSelect: (provider: ProviderKind, model: string) => void;
   toggleInteractionMode: () => void;
+  toggleDesignMode: () => void;
   handleRuntimeModeChange: (mode: RuntimeMode) => void;
   handleInteractionModeChange: (mode: ProviderInteractionMode) => void;
   togglePlanSidebar: () => void;
@@ -521,6 +553,7 @@ export const ChatComposer = memo(
       onChangeActivePendingUserInputCustomAnswer,
       onProviderModelSelect,
       toggleInteractionMode,
+      toggleDesignMode,
       handleRuntimeModeChange,
       handleInteractionModeChange,
       togglePlanSidebar,
@@ -1909,8 +1942,10 @@ export const ChatComposer = memo(
                       planSidebarOpen={planSidebarOpen}
                       runtimeMode={runtimeMode}
                       showInteractionModeToggle={composerProviderControls.showInteractionModeToggle}
+                      showDesignModeToggle={composerProviderControls.showDesignModeToggle}
                       traitsMenuContent={providerTraitsMenuContent}
                       onToggleInteractionMode={toggleInteractionMode}
+                      onToggleDesignMode={toggleDesignMode}
                       onTogglePlanSidebar={togglePlanSidebar}
                       onRuntimeModeChange={handleRuntimeModeChange}
                     />
@@ -1929,12 +1964,14 @@ export const ChatComposer = memo(
                         showInteractionModeToggle={
                           composerProviderControls.showInteractionModeToggle
                         }
+                        showDesignModeToggle={composerProviderControls.showDesignModeToggle}
                         interactionMode={interactionMode}
                         runtimeMode={runtimeMode}
                         showPlanToggle={showPlanSidebarToggle}
                         planSidebarLabel={planSidebarLabel}
                         planSidebarOpen={planSidebarOpen}
                         onToggleInteractionMode={toggleInteractionMode}
+                        onToggleDesignMode={toggleDesignMode}
                         onRuntimeModeChange={handleRuntimeModeChange}
                         onTogglePlanSidebar={togglePlanSidebar}
                       />

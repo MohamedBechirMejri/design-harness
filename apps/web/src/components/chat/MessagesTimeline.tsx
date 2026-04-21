@@ -32,6 +32,8 @@ import {
 import { Button } from "../ui/button";
 import { buildExpandedImagePreview, ExpandedImagePreview } from "./ExpandedImagePreview";
 import { ProposedPlanCard } from "./ProposedPlanCard";
+import { DesignQuestionsCard } from "./DesignQuestionsCard";
+import { parseDesignQuestionsMessage } from "../../designQuestions";
 import { ChangedFilesTree } from "./ChangedFilesTree";
 import { DiffStatLabel, hasNonZeroStat } from "./DiffStatLabel";
 import { MessageCopyButton } from "./MessageCopyButton";
@@ -84,6 +86,7 @@ interface TimelineRowSharedState {
   onRevertUserMessage: (messageId: MessageId) => void;
   onImageExpand: (preview: ExpandedImagePreview) => void;
   onOpenTurnDiff: (turnId: TurnId, filePath?: string) => void;
+  onSubmitDesignAnswers?: (compiledText: string) => void | Promise<void>;
 }
 
 const TimelineRowCtx = createContext<TimelineRowSharedState>(null!);
@@ -114,6 +117,7 @@ interface MessagesTimelineProps {
   timestampFormat: TimestampFormat;
   workspaceRoot: string | undefined;
   onIsAtEndChange: (isAtEnd: boolean) => void;
+  onSubmitDesignAnswers?: (compiledText: string) => void | Promise<void>;
 }
 
 // ---------------------------------------------------------------------------
@@ -142,6 +146,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   timestampFormat,
   workspaceRoot,
   onIsAtEndChange,
+  onSubmitDesignAnswers,
 }: MessagesTimelineProps) {
   const rawRows = useMemo(
     () =>
@@ -207,6 +212,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       onRevertUserMessage,
       onImageExpand,
       onOpenTurnDiff,
+      ...(onSubmitDesignAnswers ? { onSubmitDesignAnswers } : {}),
     }),
     [
       activeTurnInProgress,
@@ -223,6 +229,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       onRevertUserMessage,
       onImageExpand,
       onOpenTurnDiff,
+      onSubmitDesignAnswers,
     ],
   );
 
@@ -402,11 +409,53 @@ function TimelineRowContent({ row }: { row: TimelineRow }) {
                 </div>
               )}
               <div className="min-w-0 px-1 py-0.5">
-                <ChatMarkdown
-                  text={messageText}
-                  cwd={ctx.markdownCwd}
-                  isStreaming={Boolean(row.message.streaming)}
-                />
+                {(() => {
+                  const parsedDesign = parseDesignQuestionsMessage(messageText);
+                  if (parsedDesign.block || parsedDesign.rawBlock) {
+                    return (
+                      <>
+                        {parsedDesign.preamble.length > 0 ? (
+                          <ChatMarkdown
+                            text={parsedDesign.preamble}
+                            cwd={ctx.markdownCwd}
+                            isStreaming={Boolean(row.message.streaming)}
+                          />
+                        ) : null}
+                        {parsedDesign.block ? (
+                          <DesignQuestionsCard
+                            block={parsedDesign.block}
+                            disabled={row.message.streaming || ctx.activeTurnInProgress}
+                            {...(ctx.onSubmitDesignAnswers
+                              ? { onSubmit: ctx.onSubmitDesignAnswers }
+                              : {})}
+                          />
+                        ) : row.message.streaming ? (
+                          <div className="my-2 rounded-xl border border-pink-400/20 bg-pink-400/5 p-4 text-xs text-muted-foreground/70">
+                            Preparing design questions…
+                          </div>
+                        ) : parsedDesign.parseError ? (
+                          <div className="my-2 rounded-xl border border-red-400/30 bg-red-500/5 p-3 text-xs text-red-300/90">
+                            Could not parse design questions block: {parsedDesign.parseError}
+                          </div>
+                        ) : null}
+                        {parsedDesign.trailing.length > 0 ? (
+                          <ChatMarkdown
+                            text={parsedDesign.trailing}
+                            cwd={ctx.markdownCwd}
+                            isStreaming={false}
+                          />
+                        ) : null}
+                      </>
+                    );
+                  }
+                  return (
+                    <ChatMarkdown
+                      text={messageText}
+                      cwd={ctx.markdownCwd}
+                      isStreaming={Boolean(row.message.streaming)}
+                    />
+                  );
+                })()}
                 <AssistantChangedFilesSection
                   turnSummary={row.assistantTurnDiffSummary}
                   routeThreadKey={ctx.routeThreadKey}

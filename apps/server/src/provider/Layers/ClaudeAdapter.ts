@@ -61,6 +61,7 @@ import {
 import { resolveAttachmentPath } from "../../attachmentStore.ts";
 import { ServerConfig } from "../../config.ts";
 import { ServerSettingsService } from "../../serverSettings.ts";
+import { renderDesignModeInstructions } from "../DesignModeInstructions.ts";
 import { getClaudeModelCapabilities, resolveClaudeApiModelId } from "./ClaudeProvider.ts";
 import {
   ProviderAdapterProcessError,
@@ -565,7 +566,12 @@ function buildPromptText(input: ProviderSendTurnInput): string {
   const trimmedEffort = trimOrNull(rawEffort);
   const promptEffort =
     trimmedEffort && caps.promptInjectedEffortLevels.includes(trimmedEffort) ? trimmedEffort : null;
-  return applyClaudePromptEffortPrefix(input.input?.trim() ?? "", promptEffort);
+  const withEffort = applyClaudePromptEffortPrefix(input.input?.trim() ?? "", promptEffort);
+  if (input.interactionMode === "design") {
+    const designInstructions = renderDesignModeInstructions({ threadId: input.threadId });
+    return `${designInstructions}\n\n---\n\n${withEffort}`;
+  }
+  return withEffort;
 }
 
 function buildUserMessage(input: {
@@ -3023,14 +3029,15 @@ const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
 
     // Apply interaction mode by switching the SDK's permission mode.
     // "plan" maps directly to the SDK's "plan" permission mode;
-    // "default" restores the session's original permission mode.
+    // "default" and "design" both restore the session's original permission
+    // mode — design mode is driven entirely by prompt instructions.
     // When interactionMode is absent we leave the current mode unchanged.
     if (input.interactionMode === "plan") {
       yield* Effect.tryPromise({
         try: () => context.query.setPermissionMode("plan"),
         catch: (cause) => toRequestError(input.threadId, "turn/setPermissionMode", cause),
       });
-    } else if (input.interactionMode === "default") {
+    } else if (input.interactionMode === "default" || input.interactionMode === "design") {
       yield* Effect.tryPromise({
         try: () => context.query.setPermissionMode(context.basePermissionMode ?? "default"),
         catch: (cause) => toRequestError(input.threadId, "turn/setPermissionMode", cause),

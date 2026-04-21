@@ -1905,6 +1905,9 @@ export default function ChatView(props: ChatViewProps) {
   const toggleInteractionMode = useCallback(() => {
     handleInteractionModeChange(interactionMode === "plan" ? "default" : "plan");
   }, [handleInteractionModeChange, interactionMode]);
+  const toggleDesignMode = useCallback(() => {
+    handleInteractionModeChange(interactionMode === "design" ? "default" : "design");
+  }, [handleInteractionModeChange, interactionMode]);
   const togglePlanSidebar = useCallback(() => {
     setPlanSidebarOpen((open) => {
       if (open) {
@@ -2837,7 +2840,7 @@ export default function ChatView(props: ChatViewProps) {
       interactionMode: nextInteractionMode,
     }: {
       text: string;
-      interactionMode: "default" | "plan";
+      interactionMode: "default" | "plan" | "design";
     }) => {
       const api = readEnvironmentApi(environmentId);
       if (
@@ -2974,6 +2977,16 @@ export default function ChatView(props: ChatViewProps) {
       setThreadError,
       environmentId,
     ],
+  );
+
+  const onSubmitDesignAnswers = useCallback(
+    async (compiledText: string) => {
+      await onSubmitPlanFollowUp({
+        text: compiledText,
+        interactionMode: "design",
+      });
+    },
+    [onSubmitPlanFollowUp],
   );
 
   const onImplementPlanInNewThread = useCallback(async () => {
@@ -3290,6 +3303,7 @@ export default function ChatView(props: ChatViewProps) {
               timestampFormat={timestampFormat}
               workspaceRoot={activeWorkspaceRoot}
               onIsAtEndChange={onIsAtEndChange}
+              onSubmitDesignAnswers={onSubmitDesignAnswers}
             />
 
             {/* scroll to bottom pill — shown when user has scrolled away from the bottom */}
@@ -3369,6 +3383,7 @@ export default function ChatView(props: ChatViewProps) {
               }
               onProviderModelSelect={onProviderModelSelect}
               toggleInteractionMode={toggleInteractionMode}
+              toggleDesignMode={toggleDesignMode}
               handleRuntimeModeChange={handleRuntimeModeChange}
               handleInteractionModeChange={handleInteractionModeChange}
               togglePlanSidebar={togglePlanSidebar}
