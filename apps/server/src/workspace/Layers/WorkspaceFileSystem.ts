@@ -8,7 +8,7 @@ import {
   type WorkspaceFileSystemShape,
 } from "../Services/WorkspaceFileSystem.ts";
 import { WorkspaceEntries } from "../Services/WorkspaceEntries.ts";
-import { WorkspacePaths } from "../Services/WorkspacePaths.ts";
+import { WorkspacePaths, WorkspacePathOutsideRootError } from "../Services/WorkspacePaths.ts";
 
 const DESIGN_SUBDIR = ".t3code/design";
 const DESIGN_MAX_FILE_BYTES = 2 * 1024 * 1024;
@@ -64,34 +64,61 @@ export const makeWorkspaceFileSystem = Effect.gen(function* () {
       (resolved) => resolved.absolutePath,
     );
 
+  const DESIGN_LOOKUP_MAX_HOPS = 8;
+
+  const locateDesignRoot = (
+    cwd: string,
+    threadId: string,
+  ): Effect.Effect<{ absolutePath: string; exists: boolean }, WorkspaceFileSystemError> =>
+    Effect.gen(function* () {
+      const primary = yield* designDirFor(cwd, threadId).pipe(
+        Effect.catchTag("WorkspacePathOutsideRootError", (cause) =>
+          Effect.fail(
+            new WorkspaceFileSystemError({
+              cwd,
+              operation: "workspaceFileSystem.listDesignFiles.resolve",
+              detail: cause.message,
+              cause,
+            }),
+          ),
+        ),
+      );
+      const primaryExists = yield* fileSystem.exists(primary).pipe(
+        Effect.catch((cause) =>
+          Effect.fail(
+            new WorkspaceFileSystemError({
+              cwd,
+              operation: "workspaceFileSystem.listDesignFiles.exists",
+              detail: cause.message,
+              cause,
+            }),
+          ),
+        ),
+      );
+      if (primaryExists) {
+        return { absolutePath: primary, exists: true };
+      }
+      let current = path.resolve(cwd);
+      for (let hop = 0; hop < DESIGN_LOOKUP_MAX_HOPS; hop += 1) {
+        const parent = path.dirname(current);
+        if (parent === current) break;
+        current = parent;
+        const candidate = path.join(current, DESIGN_SUBDIR, threadId);
+        const candidateExists = yield* fileSystem
+          .exists(candidate)
+          .pipe(Effect.catch(() => Effect.succeed(false)));
+        if (candidateExists) {
+          return { absolutePath: candidate, exists: true };
+        }
+      }
+      return { absolutePath: primary, exists: false };
+    });
+
   const listDesignFiles: WorkspaceFileSystemShape["listDesignFiles"] = Effect.fn(
     "WorkspaceFileSystem.listDesignFiles",
   )(function* (input) {
-    const designRoot = yield* designDirFor(input.cwd, input.threadId).pipe(
-      Effect.catchTag("WorkspacePathOutsideRootError", (cause) =>
-        Effect.fail(
-          new WorkspaceFileSystemError({
-            cwd: input.cwd,
-            operation: "workspaceFileSystem.listDesignFiles.resolve",
-            detail: cause.message,
-            cause,
-          }),
-        ),
-      ),
-    );
+    const { absolutePath: designRoot, exists } = yield* locateDesignRoot(input.cwd, input.threadId);
 
-    const exists = yield* fileSystem.exists(designRoot).pipe(
-      Effect.catch((cause) =>
-        Effect.fail(
-          new WorkspaceFileSystemError({
-            cwd: input.cwd,
-            operation: "workspaceFileSystem.listDesignFiles.exists",
-            detail: cause.message,
-            cause,
-          }),
-        ),
-      ),
-    );
     if (!exists) {
       return {
         entries: [] as ReadonlyArray<DesignPreviewEntry>,
@@ -162,11 +189,42 @@ export const makeWorkspaceFileSystem = Effect.gen(function* () {
   const readDesignFile: WorkspaceFileSystemShape["readDesignFile"] = Effect.fn(
     "WorkspaceFileSystem.readDesignFile",
   )(function* (input) {
-    const target = yield* workspacePaths.resolveRelativePathWithinRoot({
-      workspaceRoot: input.cwd,
-      relativePath: `${DESIGN_SUBDIR}/${input.threadId}/${input.relativePath}`,
-    });
-    const info = yield* fileSystem.stat(target.absolutePath).pipe(
+    const located = yield* locateDesignRoot(input.cwd, input.threadId);
+    if (!located.exists) {
+      return yield* Effect.fail(
+        new WorkspaceFileSystemError({
+          cwd: input.cwd,
+          relativePath: input.relativePath,
+          operation: "workspaceFileSystem.readDesignFile",
+          detail: "Design directory does not exist.",
+        }),
+      );
+    }
+    const trimmedRelative = input.relativePath.trim();
+    if (path.isAbsolute(trimmedRelative) || trimmedRelative.startsWith("..")) {
+      return yield* Effect.fail(
+        new WorkspacePathOutsideRootError({
+          workspaceRoot: located.absolutePath,
+          relativePath: input.relativePath,
+        }),
+      );
+    }
+    const absolutePath = path.resolve(located.absolutePath, trimmedRelative);
+    const relativeToDesign = path.relative(located.absolutePath, absolutePath);
+    if (
+      relativeToDesign.length === 0 ||
+      relativeToDesign === "." ||
+      relativeToDesign.startsWith("..") ||
+      path.isAbsolute(relativeToDesign)
+    ) {
+      return yield* Effect.fail(
+        new WorkspacePathOutsideRootError({
+          workspaceRoot: located.absolutePath,
+          relativePath: input.relativePath,
+        }),
+      );
+    }
+    const info = yield* fileSystem.stat(absolutePath).pipe(
       Effect.catch((cause) =>
         Effect.fail(
           new WorkspaceFileSystemError({
@@ -199,7 +257,7 @@ export const makeWorkspaceFileSystem = Effect.gen(function* () {
         }),
       );
     }
-    const contents = yield* fileSystem.readFileString(target.absolutePath).pipe(
+    const contents = yield* fileSystem.readFileString(absolutePath).pipe(
       Effect.catch((cause) =>
         Effect.fail(
           new WorkspaceFileSystemError({
@@ -213,9 +271,7 @@ export const makeWorkspaceFileSystem = Effect.gen(function* () {
       ),
     );
     return {
-      relativePath: target.relativePath.startsWith(`${DESIGN_SUBDIR}/${input.threadId}/`)
-        ? target.relativePath.slice(`${DESIGN_SUBDIR}/${input.threadId}/`.length)
-        : input.relativePath,
+      relativePath: relativeToDesign,
       contents,
       modifiedAtMs: info.mtime._tag === "Some" ? info.mtime.value.getTime() : 0,
     };
