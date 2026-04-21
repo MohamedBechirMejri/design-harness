@@ -424,7 +424,7 @@ function TimelineRowContent({ row }: { row: TimelineRow }) {
                         {parsedDesign.block ? (
                           <DesignQuestionsCard
                             block={parsedDesign.block}
-                            disabled={row.message.streaming || ctx.activeTurnInProgress}
+                            disabled={row.message.streaming}
                             {...(ctx.onSubmitDesignAnswers
                               ? { onSubmit: ctx.onSubmitDesignAnswers }
                               : {})}
