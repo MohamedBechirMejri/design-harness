@@ -169,10 +169,13 @@ const ComposerFooterModeControls = memo(function ComposerFooterModeControls(prop
   showPlanToggle: boolean;
   planSidebarLabel: string;
   planSidebarOpen: boolean;
+  showDesignSidebarToggle: boolean;
+  designSidebarOpen: boolean;
   onToggleInteractionMode: () => void;
   onToggleDesignMode: () => void;
   onRuntimeModeChange: (mode: RuntimeMode) => void;
   onTogglePlanSidebar: () => void;
+  onToggleDesignSidebar: () => void;
 }) {
   const runtimeModeOption = runtimeModeConfig[props.runtimeMode];
   const RuntimeModeIcon = runtimeModeOption.icon;
@@ -290,6 +293,28 @@ const ComposerFooterModeControls = memo(function ComposerFooterModeControls(prop
           >
             <ListTodoIcon />
             <span className="sr-only sm:not-sr-only">{props.planSidebarLabel}</span>
+          </Button>
+        </>
+      ) : null}
+
+      {props.showDesignSidebarToggle ? (
+        <>
+          <Separator orientation="vertical" className="mx-0.5 hidden h-4 sm:block" />
+          <Button
+            variant="ghost"
+            className={cn(
+              "shrink-0 whitespace-nowrap px-2 sm:px-3",
+              props.designSidebarOpen
+                ? "text-pink-400 hover:text-pink-300"
+                : "text-muted-foreground/70 hover:text-foreground/80",
+            )}
+            size="sm"
+            type="button"
+            onClick={props.onToggleDesignSidebar}
+            title={props.designSidebarOpen ? "Hide design preview" : "Show design preview"}
+          >
+            <PaletteIcon />
+            <span className="sr-only sm:not-sr-only">Preview</span>
           </Button>
         </>
       ) : null}
@@ -483,6 +508,8 @@ export interface ChatComposerProps {
   handleRuntimeModeChange: (mode: RuntimeMode) => void;
   handleInteractionModeChange: (mode: ProviderInteractionMode) => void;
   togglePlanSidebar: () => void;
+  toggleDesignSidebar: () => void;
+  designSidebarOpen: boolean;
 
   focusComposer: () => void;
   scheduleComposerFocus: () => void;
@@ -557,6 +584,8 @@ export const ChatComposer = memo(
       handleRuntimeModeChange,
       handleInteractionModeChange,
       togglePlanSidebar,
+      toggleDesignSidebar,
+      designSidebarOpen,
       focusComposer,
       scheduleComposerFocus,
       setThreadError,
@@ -1943,10 +1972,13 @@ export const ChatComposer = memo(
                       runtimeMode={runtimeMode}
                       showInteractionModeToggle={composerProviderControls.showInteractionModeToggle}
                       showDesignModeToggle={composerProviderControls.showDesignModeToggle}
+                      showDesignSidebarToggle={composerProviderControls.showDesignModeToggle}
+                      designSidebarOpen={designSidebarOpen}
                       traitsMenuContent={providerTraitsMenuContent}
                       onToggleInteractionMode={toggleInteractionMode}
                       onToggleDesignMode={toggleDesignMode}
                       onTogglePlanSidebar={togglePlanSidebar}
+                      onToggleDesignSidebar={toggleDesignSidebar}
                       onRuntimeModeChange={handleRuntimeModeChange}
                     />
                   ) : (
@@ -1970,10 +2002,13 @@ export const ChatComposer = memo(
                         showPlanToggle={showPlanSidebarToggle}
                         planSidebarLabel={planSidebarLabel}
                         planSidebarOpen={planSidebarOpen}
+                        showDesignSidebarToggle={composerProviderControls.showDesignModeToggle}
+                        designSidebarOpen={designSidebarOpen}
                         onToggleInteractionMode={toggleInteractionMode}
                         onToggleDesignMode={toggleDesignMode}
                         onRuntimeModeChange={handleRuntimeModeChange}
                         onTogglePlanSidebar={togglePlanSidebar}
+                        onToggleDesignSidebar={toggleDesignSidebar}
                       />
                     </>
                   )}

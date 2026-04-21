@@ -98,6 +98,7 @@ import { RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY } from "../rightPanelLayout";
 import { BranchToolbar } from "./BranchToolbar";
 import { resolveShortcutCommand, shortcutLabelForCommand } from "../keybindings";
 import PlanSidebar from "./PlanSidebar";
+import DesignPreviewSidebar from "./DesignPreviewSidebar";
 import ThreadTerminalDrawer from "./ThreadTerminalDrawer";
 import { ChevronDownIcon } from "lucide-react";
 import { cn, randomUUID } from "~/lib/utils";
@@ -682,6 +683,8 @@ export default function ChatView(props: ChatViewProps) {
   const [pendingUserInputQuestionIndexByRequestId, setPendingUserInputQuestionIndexByRequestId] =
     useState<Record<string, number>>({});
   const [planSidebarOpen, setPlanSidebarOpen] = useState(false);
+  const [designSidebarOpen, setDesignSidebarOpen] = useState(false);
+  const [designSidebarManuallyClosed, setDesignSidebarManuallyClosed] = useState(false);
   const shouldUsePlanSidebarSheet = useMediaQuery(RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY);
   // Tracks whether the user explicitly dismissed the sidebar for the active turn.
   const planSidebarDismissedForTurnRef = useRef<string | null>(null);
@@ -1925,6 +1928,22 @@ export default function ChatView(props: ChatViewProps) {
       activePlan?.turnId ?? sidebarProposedPlan?.turnId ?? "__dismissed__";
   }, [activePlan?.turnId, sidebarProposedPlan?.turnId]);
 
+  const toggleDesignSidebar = useCallback(() => {
+    setDesignSidebarOpen((open) => {
+      if (open) {
+        setDesignSidebarManuallyClosed(true);
+      } else {
+        setDesignSidebarManuallyClosed(false);
+        setPlanSidebarOpen(false);
+      }
+      return !open;
+    });
+  }, []);
+  const closeDesignSidebar = useCallback(() => {
+    setDesignSidebarOpen(false);
+    setDesignSidebarManuallyClosed(true);
+  }, []);
+
   const persistThreadSettingsForNextTurn = useCallback(
     async (input: {
       threadId: ThreadId;
@@ -2013,7 +2032,45 @@ export default function ChatView(props: ChatViewProps) {
       setPlanSidebarOpen(false);
     }
     planSidebarDismissedForTurnRef.current = null;
+    setDesignSidebarOpen(false);
+    setDesignSidebarManuallyClosed(false);
   }, [activeThread?.id]);
+
+  useEffect(() => {
+    if (!activeThread?.id || !activeWorkspaceRoot) return undefined;
+    const threadId = activeThread.id;
+    const cwd = activeWorkspaceRoot;
+    const envId = activeThread.environmentId;
+    let cancelled = false;
+    const check = async () => {
+      const api = readEnvironmentApi(envId);
+      if (!api) return;
+      try {
+        const result = await api.designPreview.list({ cwd, threadId });
+        if (cancelled) return;
+        if (result.entries.length > 0) {
+          setDesignSidebarOpen((open) => {
+            if (open) return open;
+            if (designSidebarManuallyClosed) return open;
+            return true;
+          });
+        }
+      } catch {
+        // Swallow — the directory may not exist yet.
+      }
+    };
+    void check();
+    const interval = window.setInterval(check, 3000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [
+    activeThread?.id,
+    activeThread?.environmentId,
+    activeWorkspaceRoot,
+    designSidebarManuallyClosed,
+  ]);
 
   // Auto-open the plan sidebar when plan/todo steps arrive for the current turn.
   // Don't auto-open for plans carried over from a previous turn (the user can open manually).
@@ -3387,6 +3444,8 @@ export default function ChatView(props: ChatViewProps) {
               handleRuntimeModeChange={handleRuntimeModeChange}
               handleInteractionModeChange={handleInteractionModeChange}
               togglePlanSidebar={togglePlanSidebar}
+              toggleDesignSidebar={toggleDesignSidebar}
+              designSidebarOpen={designSidebarOpen}
               focusComposer={focusComposer}
               scheduleComposerFocus={scheduleComposerFocus}
               setThreadError={setThreadError}
@@ -3453,6 +3512,17 @@ export default function ChatView(props: ChatViewProps) {
             onClose={closePlanSidebar}
           />
         ) : null}
+
+        {/* Design preview sidebar */}
+        {designSidebarOpen && !shouldUsePlanSidebarSheet && activeThread ? (
+          <DesignPreviewSidebar
+            environmentId={activeThread.environmentId}
+            threadId={activeThread.id}
+            workspaceRoot={activeWorkspaceRoot}
+            mode="sidebar"
+            onClose={closeDesignSidebar}
+          />
+        ) : null}
       </div>
       {/* end horizontal flex container */}
 
@@ -3485,6 +3555,17 @@ export default function ChatView(props: ChatViewProps) {
             timestampFormat={timestampFormat}
             mode="sheet"
             onClose={closePlanSidebar}
+          />
+        </RightPanelSheet>
+      ) : null}
+      {shouldUsePlanSidebarSheet && activeThread ? (
+        <RightPanelSheet open={designSidebarOpen} onClose={closeDesignSidebar}>
+          <DesignPreviewSidebar
+            environmentId={activeThread.environmentId}
+            threadId={activeThread.id}
+            workspaceRoot={activeWorkspaceRoot}
+            mode="sheet"
+            onClose={closeDesignSidebar}
           />
         </RightPanelSheet>
       ) : null}
