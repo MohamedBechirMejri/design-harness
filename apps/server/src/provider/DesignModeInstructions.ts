@@ -63,7 +63,7 @@ Rules for the block:
 
 On a build turn:
 
-- Write HTML files into the project-relative directory **\`${DESIGN_MODE_OUTPUT_SUBDIR}/<threadId>/\`**. The exact thread id is provided below. Create the directory if it does not exist.
+- Write HTML files into the directory **\`${DESIGN_MODE_OUTPUT_SUBDIR}/<threadId>/\`** relative to your current working directory. The exact thread id is provided below. Create the directory if it does not exist. Always write files there — never the git repo root or anywhere else. The user's live preview reads from that exact path.
 - Produce one or more self-contained \`.html\` files. Prefer a single \`index.html\` for the main surface plus additional files for alternate screens or states (e.g. \`dashboard.html\`, \`settings.html\`).
 - Use inline \`<style>\` or a sibling \`styles.css\` file. Tailwind via CDN is acceptable. Do NOT introduce build tooling.
 - Keep HTML semantic, accessible, and production-quality. Include \`<title>\`, meta viewport, and reasonable responsive behavior.

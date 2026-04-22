@@ -3103,7 +3103,7 @@ export default function ChatView(props: ChatViewProps) {
         title: nextThreadTitle,
         modelSelection: nextThreadModelSelection,
         runtimeMode,
-        interactionMode: "default",
+        interactionMode: "design",
         branch: activeThreadBranch,
         worktreePath: activeThread.worktreePath,
         createdAt,
@@ -3122,7 +3122,7 @@ export default function ChatView(props: ChatViewProps) {
           modelSelection: ctxSelectedModelSelection,
           titleSeed: nextThreadTitle,
           runtimeMode,
-          interactionMode: "default",
+          interactionMode: "design",
           sourceProposedPlan: {
             threadId: activeThread.id,
             planId: activeProposedPlan.id,
@@ -3319,7 +3319,7 @@ export default function ChatView(props: ChatViewProps) {
       {/* Main content area — chat on left, design preview always on right */}
       <div className="flex min-h-0 min-w-0 flex-1">
         {/* Chat column */}
-        <div className="flex min-h-0 min-w-0 flex-[0_0_44%] flex-col border-r border-border/60 md:flex-[0_0_44%]">
+        <div className="flex min-h-0 min-w-0 flex-[0_0_40%] flex-col border-r border-border/60 md:flex-[0_0_38%] xl:flex-[0_0_35%]">
           {/* Messages Wrapper */}
           <div className="relative flex min-h-0 flex-1 flex-col">
             {/* Messages — LegendList handles virtualization and scrolling internally */}

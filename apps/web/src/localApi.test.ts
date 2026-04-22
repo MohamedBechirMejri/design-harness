@@ -54,6 +54,10 @@ const rpcClientMock = {
   filesystem: {
     browse: vi.fn(),
   },
+  designPreview: {
+    list: vi.fn(),
+    read: vi.fn(),
+  },
   shell: {
     openInEditor: vi.fn(),
   },

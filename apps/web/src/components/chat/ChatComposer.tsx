@@ -1775,8 +1775,8 @@ export const ChatComposer = memo(
                       : showPlanFollowUpPrompt && activeProposedPlan
                         ? "Add feedback to refine the plan, or leave this blank to implement it"
                         : phase === "disconnected"
-                          ? "Ask for follow-up changes or attach images"
-                          : "Ask anything, @tag files/folders, or use / to show available commands"
+                          ? "Ask for a design refinement or attach reference images"
+                          : "Describe a design, a refinement, or drop reference images here"
                 }
                 disabled={isConnecting || isComposerApprovalState}
               />
