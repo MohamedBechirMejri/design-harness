@@ -157,27 +157,6 @@ const terminalContextIdListsEqual = (
 ): boolean =>
   contexts.length === ids.length && contexts.every((context, index) => context.id === ids[index]);
 
-// Design-only build: mode/plan/runtime/preview toggles removed.
-// Retained as an empty component so call sites don't need to change shape.
-const ComposerFooterModeControls = memo(function ComposerFooterModeControls(_props: {
-  showInteractionModeToggle?: boolean;
-  showDesignModeToggle?: boolean;
-  interactionMode?: ProviderInteractionMode;
-  runtimeMode?: RuntimeMode;
-  showPlanToggle?: boolean;
-  planSidebarLabel?: string;
-  planSidebarOpen?: boolean;
-  showDesignSidebarToggle?: boolean;
-  designSidebarOpen?: boolean;
-  onToggleInteractionMode?: () => void;
-  onToggleDesignMode?: () => void;
-  onRuntimeModeChange?: (mode: RuntimeMode) => void;
-  onTogglePlanSidebar?: () => void;
-  onToggleDesignSidebar?: () => void;
-}) {
-  return null;
-});
-
 const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(props: {
   compact: boolean;
   activeContextWindow: ReturnType<typeof deriveLatestContextWindowSnapshot>;
@@ -1820,54 +1799,13 @@ export const ChatComposer = memo(
                   />
 
                   {isComposerFooterCompact ? (
-                    <CompactComposerControlsMenu
-                      activePlan={showPlanSidebarToggle}
-                      interactionMode={interactionMode}
-                      planSidebarLabel={planSidebarLabel}
-                      planSidebarOpen={planSidebarOpen}
-                      runtimeMode={runtimeMode}
-                      showInteractionModeToggle={composerProviderControls.showInteractionModeToggle}
-                      showDesignModeToggle={composerProviderControls.showDesignModeToggle}
-                      showDesignSidebarToggle={composerProviderControls.showDesignModeToggle}
-                      designSidebarOpen={designSidebarOpen}
-                      traitsMenuContent={providerTraitsMenuContent}
-                      onToggleInteractionMode={toggleInteractionMode}
-                      onToggleDesignMode={toggleDesignMode}
-                      onTogglePlanSidebar={togglePlanSidebar}
-                      onToggleDesignSidebar={toggleDesignSidebar}
-                      onRuntimeModeChange={handleRuntimeModeChange}
-                    />
-                  ) : (
+                    <CompactComposerControlsMenu traitsMenuContent={providerTraitsMenuContent} />
+                  ) : providerTraitsPicker ? (
                     <>
-                      {providerTraitsPicker ? (
-                        <>
-                          <Separator
-                            orientation="vertical"
-                            className="mx-0.5 hidden h-4 sm:block"
-                          />
-                          {providerTraitsPicker}
-                        </>
-                      ) : null}
-                      <ComposerFooterModeControls
-                        showInteractionModeToggle={
-                          composerProviderControls.showInteractionModeToggle
-                        }
-                        showDesignModeToggle={composerProviderControls.showDesignModeToggle}
-                        interactionMode={interactionMode}
-                        runtimeMode={runtimeMode}
-                        showPlanToggle={showPlanSidebarToggle}
-                        planSidebarLabel={planSidebarLabel}
-                        planSidebarOpen={planSidebarOpen}
-                        showDesignSidebarToggle={composerProviderControls.showDesignModeToggle}
-                        designSidebarOpen={designSidebarOpen}
-                        onToggleInteractionMode={toggleInteractionMode}
-                        onToggleDesignMode={toggleDesignMode}
-                        onRuntimeModeChange={handleRuntimeModeChange}
-                        onTogglePlanSidebar={togglePlanSidebar}
-                        onToggleDesignSidebar={toggleDesignSidebar}
-                      />
+                      <Separator orientation="vertical" className="mx-0.5 hidden h-4 sm:block" />
+                      {providerTraitsPicker}
                     </>
-                  )}
+                  ) : null}
                 </div>
 
                 {/* Right side: send / stop button */}
