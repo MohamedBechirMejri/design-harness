@@ -22,8 +22,8 @@ interface DesignPreviewSidebarProps {
   environmentId: EnvironmentId;
   threadId: ThreadId;
   workspaceRoot: string | undefined;
-  mode?: "sheet" | "sidebar";
-  onClose: () => void;
+  mode?: "sheet" | "sidebar" | "pane";
+  onClose?: () => void;
 }
 
 interface TreeDirectory {
@@ -167,7 +167,9 @@ const DesignPreviewSidebar = memo(function DesignPreviewSidebar({
         "flex min-h-0 flex-col bg-card/50",
         mode === "sidebar"
           ? "h-full w-[560px] shrink-0 border-l border-border/70"
-          : "h-full w-full",
+          : mode === "pane"
+            ? "h-full w-full"
+            : "h-full w-full",
       )}
     >
       <div className="flex h-12 shrink-0 items-center justify-between border-b border-border/60 px-3">
@@ -177,7 +179,7 @@ const DesignPreviewSidebar = memo(function DesignPreviewSidebar({
             className="rounded-md bg-pink-400/10 px-1.5 py-0 text-[10px] font-semibold tracking-wide text-pink-400 uppercase"
           >
             <PaletteIcon className="mr-1 inline size-3" />
-            Design
+            Preview
           </Badge>
           <span className="text-[11px] text-muted-foreground/60">
             {entries.length === 0
@@ -195,15 +197,17 @@ const DesignPreviewSidebar = memo(function DesignPreviewSidebar({
           >
             <RefreshCwIcon className={cn("size-3.5", listQuery.isFetching && "animate-spin")} />
           </Button>
-          <Button
-            size="icon-xs"
-            variant="ghost"
-            onClick={onClose}
-            aria-label="Close design sidebar"
-            className="text-muted-foreground/50 hover:text-foreground/70"
-          >
-            <PanelRightCloseIcon className="size-3.5" />
-          </Button>
+          {mode !== "pane" && onClose ? (
+            <Button
+              size="icon-xs"
+              variant="ghost"
+              onClick={onClose}
+              aria-label="Close design sidebar"
+              className="text-muted-foreground/50 hover:text-foreground/70"
+            >
+              <PanelRightCloseIcon className="size-3.5" />
+            </Button>
+          ) : null}
         </div>
       </div>
 

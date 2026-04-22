@@ -1,34 +1,30 @@
 import { ProviderInteractionMode, RuntimeMode } from "@t3tools/contracts";
 import { memo, type ReactNode } from "react";
-import { EllipsisIcon, ListTodoIcon, PaletteIcon } from "lucide-react";
+import { EllipsisIcon } from "lucide-react";
 import { Button } from "../ui/button";
-import {
-  Menu,
-  MenuItem,
-  MenuPopup,
-  MenuRadioGroup,
-  MenuRadioItem,
-  MenuSeparator as MenuDivider,
-  MenuTrigger,
-} from "../ui/menu";
+import { Menu, MenuPopup, MenuTrigger } from "../ui/menu";
 
+// Design-only build: mode/runtime/plan/design toggles have all been
+// removed. This component now only renders the ellipsis menu when there
+// is provider-specific traits content to show.
 export const CompactComposerControlsMenu = memo(function CompactComposerControlsMenu(props: {
-  activePlan: boolean;
-  interactionMode: ProviderInteractionMode;
-  planSidebarLabel: string;
-  planSidebarOpen: boolean;
-  runtimeMode: RuntimeMode;
-  showInteractionModeToggle: boolean;
+  activePlan?: boolean;
+  interactionMode?: ProviderInteractionMode;
+  planSidebarLabel?: string;
+  planSidebarOpen?: boolean;
+  runtimeMode?: RuntimeMode;
+  showInteractionModeToggle?: boolean;
   showDesignModeToggle?: boolean;
   showDesignSidebarToggle?: boolean;
   designSidebarOpen?: boolean;
   traitsMenuContent?: ReactNode;
-  onToggleInteractionMode: () => void;
+  onToggleInteractionMode?: () => void;
   onToggleDesignMode?: () => void;
-  onTogglePlanSidebar: () => void;
+  onTogglePlanSidebar?: () => void;
   onToggleDesignSidebar?: () => void;
-  onRuntimeModeChange: (mode: RuntimeMode) => void;
+  onRuntimeModeChange?: (mode: RuntimeMode) => void;
 }) {
+  if (!props.traitsMenuContent) return null;
   return (
     <Menu>
       <MenuTrigger
@@ -43,72 +39,7 @@ export const CompactComposerControlsMenu = memo(function CompactComposerControls
       >
         <EllipsisIcon aria-hidden="true" className="size-4" />
       </MenuTrigger>
-      <MenuPopup align="start">
-        {props.traitsMenuContent ? (
-          <>
-            {props.traitsMenuContent}
-            <MenuDivider />
-          </>
-        ) : null}
-        {props.showInteractionModeToggle ? (
-          <>
-            <div className="px-2 py-1.5 font-medium text-muted-foreground text-xs">Mode</div>
-            <MenuRadioGroup
-              value={props.interactionMode}
-              onValueChange={(value) => {
-                if (!value || value === props.interactionMode) return;
-                if (value === "design") {
-                  props.onToggleDesignMode?.();
-                  return;
-                }
-                // Toggle handles switching between plan <-> default.
-                // Also handles design -> plan/default by toggling off design first
-                // (the ChatView handler normalizes intermediate states).
-                props.onToggleInteractionMode();
-              }}
-            >
-              <MenuRadioItem value="default">Chat</MenuRadioItem>
-              <MenuRadioItem value="plan">Plan</MenuRadioItem>
-              {props.showDesignModeToggle ? (
-                <MenuRadioItem value="design">Design</MenuRadioItem>
-              ) : null}
-            </MenuRadioGroup>
-            <MenuDivider />
-          </>
-        ) : null}
-        <div className="px-2 py-1.5 font-medium text-muted-foreground text-xs">Access</div>
-        <MenuRadioGroup
-          value={props.runtimeMode}
-          onValueChange={(value) => {
-            if (!value || value === props.runtimeMode) return;
-            props.onRuntimeModeChange(value as RuntimeMode);
-          }}
-        >
-          <MenuRadioItem value="approval-required">Supervised</MenuRadioItem>
-          <MenuRadioItem value="auto-accept-edits">Auto-accept edits</MenuRadioItem>
-          <MenuRadioItem value="full-access">Full access</MenuRadioItem>
-        </MenuRadioGroup>
-        {props.activePlan ? (
-          <>
-            <MenuDivider />
-            <MenuItem onClick={props.onTogglePlanSidebar}>
-              <ListTodoIcon className="size-4 shrink-0" />
-              {props.planSidebarOpen
-                ? `Hide ${props.planSidebarLabel.toLowerCase()} sidebar`
-                : `Show ${props.planSidebarLabel.toLowerCase()} sidebar`}
-            </MenuItem>
-          </>
-        ) : null}
-        {props.showDesignSidebarToggle && props.onToggleDesignSidebar ? (
-          <>
-            <MenuDivider />
-            <MenuItem onClick={props.onToggleDesignSidebar}>
-              <PaletteIcon className="size-4 shrink-0" />
-              {props.designSidebarOpen ? "Hide design preview" : "Show design preview"}
-            </MenuItem>
-          </>
-        ) : null}
-      </MenuPopup>
+      <MenuPopup align="start">{props.traitsMenuContent}</MenuPopup>
     </Menu>
   );
 });
