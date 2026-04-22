@@ -3,7 +3,6 @@ import { useQuery } from "@tanstack/react-query";
 import {
   ExternalLinkIcon,
   FileIcon,
-  FolderIcon,
   PaletteIcon,
   PanelRightCloseIcon,
   RefreshCwIcon,
@@ -24,46 +23,6 @@ interface DesignPreviewSidebarProps {
   workspaceRoot: string | undefined;
   mode?: "sheet" | "sidebar" | "pane";
   onClose?: () => void;
-}
-
-interface TreeDirectory {
-  name: string;
-  path: string;
-  directories: TreeDirectory[];
-  files: DesignPreviewEntry[];
-}
-
-function sortTreeDirectory(dir: TreeDirectory): void {
-  dir.directories.sort((a, b) => a.name.localeCompare(b.name));
-  dir.files.sort((a, b) => a.name.localeCompare(b.name));
-  for (const child of dir.directories) sortTreeDirectory(child);
-}
-
-function buildTree(entries: ReadonlyArray<DesignPreviewEntry>): TreeDirectory {
-  const root: TreeDirectory = { name: "", path: "", directories: [], files: [] };
-  for (const entry of entries) {
-    const parts = entry.relativePath.split("/");
-    let cursor = root;
-    for (let i = 0; i < parts.length - 1; i += 1) {
-      const segment = parts[i]!;
-      const existing = cursor.directories.find((d) => d.name === segment);
-      if (existing) {
-        cursor = existing;
-      } else {
-        const next: TreeDirectory = {
-          name: segment,
-          path: parts.slice(0, i + 1).join("/"),
-          directories: [],
-          files: [],
-        };
-        cursor.directories.push(next);
-        cursor = next;
-      }
-    }
-    cursor.files.push(entry);
-  }
-  sortTreeDirectory(root);
-  return root;
 }
 
 function isHtmlFile(path: string): boolean {
@@ -114,8 +73,6 @@ const DesignPreviewSidebar = memo(function DesignPreviewSidebar({
     () => entries.filter((entry) => isHtmlFile(entry.relativePath)),
     [entries],
   );
-  const tree = useMemo(() => buildTree(entries), [entries]);
-
   useEffect(() => {
     if (selectedPath && entries.some((entry) => entry.relativePath === selectedPath)) {
       return;
@@ -211,106 +168,108 @@ const DesignPreviewSidebar = memo(function DesignPreviewSidebar({
         </div>
       </div>
 
-      <div className="flex min-h-0 flex-1">
-        <div className="flex w-[200px] shrink-0 flex-col border-r border-border/60">
-          <ScrollArea className="min-h-0 flex-1">
-            <div className="p-2">
-              {entries.length === 0 ? (
-                listQuery.isError ? (
-                  <div className="px-2 py-4 text-left text-xs text-rose-400">
-                    <div className="font-medium">Failed to list design files.</div>
-                    <div className="mt-1 break-words text-[10px] text-rose-400/80">
-                      {listQuery.error instanceof Error
-                        ? listQuery.error.message
-                        : String(listQuery.error ?? "")}
-                    </div>
-                    {workspaceRoot ? (
-                      <div
-                        className="mt-2 break-all text-[10px] text-muted-foreground/50"
-                        title={`${workspaceRoot}/.t3code/design/${threadId}`}
-                      >
-                        {workspaceRoot}/.t3code/design/{threadId}
-                      </div>
-                    ) : null}
-                  </div>
-                ) : listQuery.isPending ? (
-                  <div className="px-2 py-6 text-center text-xs text-muted-foreground/60">
-                    Loading…
-                  </div>
-                ) : (
-                  <div className="px-2 py-4 text-left text-xs text-muted-foreground/60">
-                    <div>
-                      {rootExists === false
-                        ? "Design folder doesn't exist yet."
-                        : "No design files here yet."}
-                    </div>
-                    {resolvedAbsolutePath ? (
-                      <div
-                        className="mt-2 break-all text-[10px] text-muted-foreground/40"
-                        title={resolvedAbsolutePath}
-                      >
-                        <div>Looking in:</div>
-                        <div className="mt-0.5 text-muted-foreground/70">
-                          {resolvedAbsolutePath}
-                        </div>
-                      </div>
-                    ) : workspaceRoot ? (
-                      <div
-                        className="mt-2 break-all text-[10px] text-muted-foreground/40"
-                        title={`${workspaceRoot}/.t3code/design/${threadId}`}
-                      >
-                        Looking in{" "}
-                        <span className="text-muted-foreground/60">.t3code/design/{threadId}</span>
-                      </div>
-                    ) : null}
-                  </div>
-                )
-              ) : (
-                <DesignPreviewTree
-                  tree={tree}
-                  selectedPath={selectedPath}
-                  onSelect={setSelectedPath}
-                />
-              )}
-            </div>
-          </ScrollArea>
-        </div>
-
-        <div className="flex min-h-0 flex-1 flex-col">
-          <div className="flex shrink-0 items-center justify-between border-b border-border/60 px-3 py-1.5 text-[11px] text-muted-foreground/70">
-            <div className="min-w-0 truncate">
-              {selectedEntry ? (
-                <span title={selectedEntry.relativePath}>
-                  {selectedEntry.relativePath}
-                  <span className="ml-2 text-muted-foreground/40">
-                    {formatSize(selectedEntry.size)}
-                  </span>
-                </span>
-              ) : (
-                <span className="text-muted-foreground/40">No file selected</span>
-              )}
-            </div>
+      <div className="flex min-h-0 flex-1 flex-col">
+        {/* Horizontal tab strip for design files */}
+        {entries.length > 0 ? (
+          <div className="flex shrink-0 items-center gap-1 overflow-x-auto border-b border-border/60 px-2 py-1.5">
+            {entries.map((entry) => {
+              const isActive = selectedPath === entry.relativePath;
+              const isHtml = isHtmlFile(entry.relativePath);
+              return (
+                <button
+                  key={entry.relativePath}
+                  type="button"
+                  onClick={() => setSelectedPath(entry.relativePath)}
+                  title={entry.relativePath}
+                  className={cn(
+                    "inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-[11px] transition-colors",
+                    isActive
+                      ? "bg-pink-400/10 text-foreground"
+                      : "text-muted-foreground/70 hover:bg-muted/30 hover:text-foreground/90",
+                  )}
+                >
+                  <FileIcon
+                    className={cn(
+                      "size-3 shrink-0",
+                      isActive ? "text-pink-400" : "text-muted-foreground/50",
+                    )}
+                  />
+                  <span className="max-w-[140px] truncate">{entry.name}</span>
+                  {!isHtml ? (
+                    <span className="text-[9px] text-muted-foreground/40">txt</span>
+                  ) : null}
+                </button>
+              );
+            })}
             {selectedIsHtml && contents ? (
-              <Button
-                size="icon-xs"
-                variant="ghost"
-                aria-label="Open preview in new tab"
-                className="text-muted-foreground/50 hover:text-foreground/70"
-                onClick={() => {
-                  const blob = new Blob([contents], { type: "text/html" });
-                  const url = URL.createObjectURL(blob);
-                  window.open(url, "_blank", "noopener,noreferrer");
-                  setTimeout(() => URL.revokeObjectURL(url), 60_000);
-                }}
-              >
-                <ExternalLinkIcon className="size-3.5" />
-              </Button>
+              <div className="ml-auto shrink-0">
+                <Button
+                  size="icon-xs"
+                  variant="ghost"
+                  aria-label="Open preview in new tab"
+                  className="text-muted-foreground/50 hover:text-foreground/70"
+                  onClick={() => {
+                    const blob = new Blob([contents], { type: "text/html" });
+                    const url = URL.createObjectURL(blob);
+                    window.open(url, "_blank", "noopener,noreferrer");
+                    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+                  }}
+                >
+                  <ExternalLinkIcon className="size-3.5" />
+                </Button>
+              </div>
             ) : null}
           </div>
+        ) : null}
 
-          <div className="min-h-0 flex-1 bg-background">
+        {/* Empty / error states replace the preview area entirely when no files */}
+        {entries.length === 0 ? (
+          <div className="flex min-h-0 flex-1 items-center justify-center p-8">
+            {listQuery.isError ? (
+              <div className="max-w-sm text-center text-xs text-rose-400">
+                <div className="font-medium">Failed to load design files.</div>
+                <div className="mt-1 break-words text-[10px] text-rose-400/80">
+                  {listQuery.error instanceof Error
+                    ? listQuery.error.message
+                    : String(listQuery.error ?? "")}
+                </div>
+                {resolvedAbsolutePath ? (
+                  <div className="mt-3 break-all text-[10px] text-muted-foreground/50">
+                    {resolvedAbsolutePath}
+                  </div>
+                ) : null}
+              </div>
+            ) : listQuery.isPending ? (
+              <div className="text-xs text-muted-foreground/60">Loading…</div>
+            ) : (
+              <div className="flex max-w-sm flex-col items-center gap-3 text-center">
+                <div className="flex size-14 items-center justify-center rounded-2xl border border-pink-400/20 bg-pink-400/5">
+                  <PaletteIcon className="size-6 text-pink-400/70" aria-hidden />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <div className="text-sm font-medium text-foreground/80">
+                    Your design will appear here
+                  </div>
+                  <div className="text-xs text-muted-foreground/60">
+                    Describe what you want in the chat. The preview updates live as the model writes
+                    HTML.
+                  </div>
+                </div>
+                {resolvedAbsolutePath ? (
+                  <div className="mt-1 break-all text-[10px] text-muted-foreground/30">
+                    {resolvedAbsolutePath}
+                  </div>
+                ) : null}
+              </div>
+            )}
+          </div>
+        ) : null}
+
+        {/* Preview pane — only when there are files */}
+        {entries.length > 0 ? (
+          <div className="flex min-h-0 flex-1 flex-col bg-background">
             {!selectedPath ? (
-              <div className="flex h-full items-center justify-center text-xs text-muted-foreground/50">
+              <div className="flex h-full items-center justify-center px-6 text-xs text-muted-foreground/50">
                 Select a file to preview.
               </div>
             ) : readQuery.isPending ? (
@@ -337,74 +296,10 @@ const DesignPreviewSidebar = memo(function DesignPreviewSidebar({
               </ScrollArea>
             )}
           </div>
-        </div>
+        ) : null}
       </div>
     </div>
   );
 });
-
-function DesignPreviewTree(props: {
-  tree: TreeDirectory;
-  selectedPath: string | null;
-  onSelect: (path: string) => void;
-}) {
-  return <DesignPreviewTreeNode {...props} dir={props.tree} depth={0} />;
-}
-
-function DesignPreviewTreeNode(props: {
-  dir: TreeDirectory;
-  depth: number;
-  selectedPath: string | null;
-  onSelect: (path: string) => void;
-}) {
-  const { dir, depth, selectedPath, onSelect } = props;
-  return (
-    <div className="flex flex-col">
-      {dir.directories.map((child) => (
-        <div key={child.path} className="flex flex-col">
-          <div
-            className="flex items-center gap-1.5 rounded px-1.5 py-1 text-[11px] text-muted-foreground/70"
-            style={{ paddingLeft: `${depth * 10 + 6}px` }}
-          >
-            <FolderIcon className="size-3 shrink-0" />
-            <span className="truncate">{child.name}</span>
-          </div>
-          <DesignPreviewTreeNode
-            dir={child}
-            depth={depth + 1}
-            selectedPath={selectedPath}
-            onSelect={onSelect}
-          />
-        </div>
-      ))}
-      {dir.files.map((file) => {
-        const active = selectedPath === file.relativePath;
-        return (
-          <button
-            key={file.relativePath}
-            type="button"
-            onClick={() => onSelect(file.relativePath)}
-            className={cn(
-              "flex w-full min-w-0 items-center gap-1.5 rounded px-1.5 py-1 text-left text-[11px] transition-colors",
-              active
-                ? "bg-pink-400/10 text-foreground"
-                : "text-muted-foreground/80 hover:bg-muted/30 hover:text-foreground/90",
-            )}
-            style={{ paddingLeft: `${depth * 10 + 6}px` }}
-            title={file.relativePath}
-          >
-            <FileIcon
-              className={cn(
-                "size-3 shrink-0",
-                active ? "text-pink-400" : "text-muted-foreground/50",
-              )}
-            />
-            <span className="truncate">{file.name}</span>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
 
 export default DesignPreviewSidebar;

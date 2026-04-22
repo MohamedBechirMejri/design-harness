@@ -3298,9 +3298,15 @@ export default function ChatView(props: ChatViewProps) {
         )}
       >
         <div className="flex min-w-0 flex-1 items-center gap-2">
+          <span className="inline-flex size-2 rounded-full bg-pink-400/80 shadow-[0_0_8px_1px_rgba(244,114,182,0.3)]" />
           <span className="truncate text-sm font-medium text-foreground/90">
             {activeThread.title || "New design"}
           </span>
+          {activeProject?.name ? (
+            <span className="hidden truncate text-xs text-muted-foreground/50 sm:inline">
+              · {activeProject.name}
+            </span>
+          ) : null}
         </div>
       </header>
 
