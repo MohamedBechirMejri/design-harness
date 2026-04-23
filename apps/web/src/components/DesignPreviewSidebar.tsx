@@ -29,12 +29,6 @@ function isHtmlFile(path: string): boolean {
   return /\.(html?|htm)$/i.test(path);
 }
 
-function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
 const DesignPreviewSidebar = memo(function DesignPreviewSidebar({
   environmentId,
   threadId,
@@ -68,7 +62,6 @@ const DesignPreviewSidebar = memo(function DesignPreviewSidebar({
 
   const entries = listQuery.data?.entries ?? EMPTY_ENTRIES;
   const resolvedAbsolutePath = listQuery.data?.resolvedAbsolutePath;
-  const rootExists = listQuery.data?.rootExists;
   const htmlEntries = useMemo(
     () => entries.filter((entry) => isHtmlFile(entry.relativePath)),
     [entries],
