@@ -7,14 +7,11 @@ import {
   type ModelSelection,
   type ProjectScript,
   type ProviderKind,
-  type ProjectId,
   type ProviderApprovalDecision,
   type ServerProvider,
-  type ResolvedKeybindingsConfig,
   type ScopedThreadRef,
   type ThreadId,
   type TurnId,
-  type KeybindingCommand,
   OrchestrationThreadActivity,
   ProviderInteractionMode,
   RuntimeMode,
@@ -27,7 +24,6 @@ import { truncate } from "@t3tools/shared/String";
 import { Debouncer } from "@tanstack/react-pacer";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { useShallow } from "zustand/react/shallow";
 import { useGitStatus } from "~/lib/gitStatusState";
 import { usePrimaryEnvironmentId } from "../environments/primary";
 import { readEnvironmentApi } from "../environmentApi";
@@ -61,11 +57,7 @@ import {
   togglePendingUserInputOptionSelection,
   type PendingUserInputDraftAnswer,
 } from "../pendingUserInput";
-import {
-  selectProjectsAcrossEnvironments,
-  selectThreadsAcrossEnvironments,
-  useStore,
-} from "../store";
+import { useStore } from "../store";
 import { createProjectSelectorByRef, createThreadSelectorByRef } from "../storeSelectors";
 import { useUiStateStore } from "../uiStateStore";
 import {
@@ -87,29 +79,18 @@ import { useTheme } from "../hooks/useTheme";
 import { useTurnDiffSummaries } from "../hooks/useTurnDiffSummaries";
 import { useCommandPaletteStore } from "../commandPaletteStore";
 import { buildTemporaryWorktreeBranchName } from "@t3tools/shared/git";
-import { resolveShortcutCommand, shortcutLabelForCommand } from "../keybindings";
+import { resolveShortcutCommand } from "../keybindings";
 import DesignPreviewSidebar from "./DesignPreviewSidebar";
 import { ChevronDownIcon } from "lucide-react";
 import { cn, randomUUID } from "~/lib/utils";
 import { toastManager } from "./ui/toast";
-import { decodeProjectScriptKeybindingRule } from "~/lib/projectScriptKeybindings";
-import { type NewProjectScriptInput } from "./ProjectScriptsControl";
-import {
-  commandForProjectScript,
-  nextProjectScriptId,
-  projectScriptIdFromCommand,
-} from "~/projectScripts";
-import { newCommandId, newDraftId, newMessageId, newThreadId } from "~/lib/utils";
+import { projectScriptIdFromCommand } from "~/projectScripts";
+import { newCommandId, newMessageId, newThreadId } from "~/lib/utils";
 import { getProviderModelCapabilities, resolveSelectableProvider } from "../providerModels";
 import { useSettings } from "../hooks/useSettings";
 import { resolveAppModelSelection } from "../modelSelection";
 import { isTerminalFocused } from "../lib/terminalFocus";
-import { deriveLogicalProjectKeyFromSettings } from "../logicalProject";
-import {
-  useSavedEnvironmentRegistryStore,
-  useSavedEnvironmentRuntimeStore,
-} from "../environments/runtime";
-import { buildDraftThreadRouteParams } from "../threadRoutes";
+import { useSavedEnvironmentRuntimeStore } from "../environments/runtime";
 import {
   type ComposerImageAttachment,
   type DraftThreadEnvMode,
@@ -120,7 +101,6 @@ import {
   appendTerminalContextsToPrompt,
   formatTerminalContextLabel,
   type TerminalContextDraft,
-  type TerminalContextSelection,
 } from "../lib/terminalContext";
 import { selectThreadTerminalState, useTerminalStateStore } from "../terminalStateStore";
 import { ChatComposer, type ChatComposerHandle } from "./chat/ChatComposer";
@@ -128,7 +108,7 @@ import { ExpandedImageDialog } from "./chat/ExpandedImageDialog";
 import { MessagesTimeline } from "./chat/MessagesTimeline";
 import { type ExpandedImagePreview } from "./chat/ExpandedImagePreview";
 import { NoActiveThreadState } from "./NoActiveThreadState";
-import { resolveEffectiveEnvMode, resolveEnvironmentOptionLabel } from "./BranchToolbar.logic";
+import { resolveEffectiveEnvMode } from "./BranchToolbar.logic";
 import { ProviderStatusBanner } from "./chat/ProviderStatusBanner";
 import { ThreadErrorBanner } from "./chat/ThreadErrorBanner";
 import {
@@ -152,11 +132,7 @@ import {
 } from "./ChatView.logic";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
 import { useComposerHandleContext } from "../composerHandleContext";
-import {
-  useServerAvailableEditors,
-  useServerConfig,
-  useServerKeybindings,
-} from "~/rpc/serverState";
+import { useServerConfig, useServerKeybindings } from "~/rpc/serverState";
 import { sanitizeThreadErrorMessage } from "~/rpc/transportError";
 import { retainThreadDetailSubscription } from "../environments/runtime/service";
 
@@ -429,19 +405,11 @@ export default function ChatView(props: ChatViewProps) {
     (store) => store.setTerminalContexts,
   );
   const setComposerDraftModelSelection = useComposerDraftStore((store) => store.setModelSelection);
-  const setComposerDraftRuntimeMode = useComposerDraftStore((store) => store.setRuntimeMode);
   const setComposerDraftInteractionMode = useComposerDraftStore(
     (store) => store.setInteractionMode,
   );
   const clearComposerDraftContent = useComposerDraftStore((store) => store.clearComposerContent);
   const setDraftThreadContext = useComposerDraftStore((store) => store.setDraftThreadContext);
-  const getDraftSessionByLogicalProjectKey = useComposerDraftStore(
-    (store) => store.getDraftSessionByLogicalProjectKey,
-  );
-  const getDraftSession = useComposerDraftStore((store) => store.getDraftSession);
-  const setLogicalProjectDraftThreadId = useComposerDraftStore(
-    (store) => store.setLogicalProjectDraftThreadId,
-  );
   const draftThread = useComposerDraftStore((store) =>
     routeKind === "server"
       ? store.getDraftSessionByRef(routeThreadRef)
@@ -473,9 +441,9 @@ export default function ChatView(props: ChatViewProps) {
   >({});
   const [pendingUserInputQuestionIndexByRequestId, setPendingUserInputQuestionIndexByRequestId] =
     useState<Record<string, number>>({});
-  const [designSidebarOpen, setDesignSidebarOpen] = useState(false);
+  const [, setDesignSidebarOpen] = useState(false);
   const [designSidebarManuallyClosed, setDesignSidebarManuallyClosed] = useState(false);
-  const [terminalFocusRequestId, setTerminalFocusRequestId] = useState(0);
+  const [, setTerminalFocusRequestId] = useState(0);
   const [terminalLaunchContext, setTerminalLaunchContext] = useState<TerminalLaunchContext | null>(
     null,
   );
@@ -500,38 +468,16 @@ export default function ChatView(props: ChatViewProps) {
   const terminalState = useTerminalStateStore((state) =>
     selectThreadTerminalState(state.terminalStateByThreadKey, routeThreadRef),
   );
-  const openTerminalThreadKeys = useTerminalStateStore(
-    useShallow((state) =>
-      Object.entries(state.terminalStateByThreadKey).flatMap(([nextThreadKey, nextTerminalState]) =>
-        nextTerminalState.terminalOpen ? [nextThreadKey] : [],
-      ),
-    ),
-  );
   const storeSetTerminalOpen = useTerminalStateStore((s) => s.setTerminalOpen);
   const storeSplitTerminal = useTerminalStateStore((s) => s.splitTerminal);
   const storeNewTerminal = useTerminalStateStore((s) => s.newTerminal);
   const storeSetActiveTerminal = useTerminalStateStore((s) => s.setActiveTerminal);
   const storeCloseTerminal = useTerminalStateStore((s) => s.closeTerminal);
-  const serverThreadKeys = useStore(
-    useShallow((state) =>
-      selectThreadsAcrossEnvironments(state).map((thread) =>
-        scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)),
-      ),
-    ),
-  );
   const storeServerTerminalLaunchContext = useTerminalStateStore(
     (s) => s.terminalLaunchContextByThreadKey[scopedThreadKey(routeThreadRef)] ?? null,
   );
   const storeClearTerminalLaunchContext = useTerminalStateStore(
     (s) => s.clearTerminalLaunchContext,
-  );
-  const draftThreadsByThreadKey = useComposerDraftStore((store) => store.draftThreadsByThreadKey);
-  const draftThreadKeys = useMemo(
-    () =>
-      Object.values(draftThreadsByThreadKey).map((draftThread) =>
-        scopedThreadKey(scopeThreadRef(draftThread.environmentId, draftThread.threadId)),
-      ),
-    [draftThreadsByThreadKey],
   );
   const fallbackDraftProjectRef = draftThread
     ? scopeProjectRef(draftThread.environmentId, draftThread.projectId)
@@ -564,17 +510,12 @@ export default function ChatView(props: ChatViewProps) {
   const interactionMode =
     composerInteractionMode ?? activeThread?.interactionMode ?? DEFAULT_INTERACTION_MODE;
   const isLocalDraftThread = !isServerThread && localDraftThread !== undefined;
-  const canCheckoutPullRequestIntoThread = isLocalDraftThread;
   const activeThreadId = activeThread?.id ?? null;
   const activeThreadRef = useMemo(
     () => (activeThread ? scopeThreadRef(activeThread.environmentId, activeThread.id) : null),
     [activeThread],
   );
   const activeThreadKey = activeThreadRef ? scopedThreadKey(activeThreadRef) : null;
-  const existingOpenTerminalThreadKeys = useMemo(() => {
-    const existingThreadKeys = new Set<string>([...serverThreadKeys, ...draftThreadKeys]);
-    return openTerminalThreadKeys.filter((nextThreadKey) => existingThreadKeys.has(nextThreadKey));
-  }, [draftThreadKeys, openTerminalThreadKeys, serverThreadKeys]);
   const activeLatestTurn = activeThread?.latestTurn ?? null;
   const threadPlanCatalog = useThreadPlanCatalog(
     useMemo(() => {
@@ -603,64 +544,6 @@ export default function ChatView(props: ChatViewProps) {
     }
     return retainThreadDetailSubscription(environmentId, threadId);
   }, [environmentId, routeKind, threadId]);
-
-  // Compute the list of environments this logical project spans, used to
-  // drive the environment picker in BranchToolbar.
-  const allProjects = useStore(useShallow(selectProjectsAcrossEnvironments));
-  const primaryEnvironmentId = usePrimaryEnvironmentId();
-  const savedEnvironmentRegistry = useSavedEnvironmentRegistryStore((s) => s.byId);
-  const savedEnvironmentRuntimeById = useSavedEnvironmentRuntimeStore((s) => s.byId);
-  const projectGroupingSettings = useSettings((settings) => ({
-    sidebarProjectGroupingMode: settings.sidebarProjectGroupingMode,
-    sidebarProjectGroupingOverrides: settings.sidebarProjectGroupingOverrides,
-  }));
-  const logicalProjectEnvironments = useMemo(() => {
-    if (!activeProject) return [];
-    const logicalKey = deriveLogicalProjectKeyFromSettings(activeProject, projectGroupingSettings);
-    const memberProjects = allProjects.filter(
-      (p) => deriveLogicalProjectKeyFromSettings(p, projectGroupingSettings) === logicalKey,
-    );
-    const seen = new Set<string>();
-    const envs: Array<{
-      environmentId: EnvironmentId;
-      projectId: ProjectId;
-      label: string;
-      isPrimary: boolean;
-    }> = [];
-    for (const p of memberProjects) {
-      if (seen.has(p.environmentId)) continue;
-      seen.add(p.environmentId);
-      const isPrimary = p.environmentId === primaryEnvironmentId;
-      const savedRecord = savedEnvironmentRegistry[p.environmentId];
-      const runtimeState = savedEnvironmentRuntimeById[p.environmentId];
-      const label = resolveEnvironmentOptionLabel({
-        isPrimary,
-        environmentId: p.environmentId,
-        runtimeLabel: runtimeState?.descriptor?.label ?? null,
-        savedLabel: savedRecord?.label ?? null,
-      });
-      envs.push({
-        environmentId: p.environmentId,
-        projectId: p.id,
-        label,
-        isPrimary,
-      });
-    }
-    // Sort: primary first, then alphabetical
-    envs.sort((a, b) => {
-      if (a.isPrimary !== b.isPrimary) return a.isPrimary ? -1 : 1;
-      return a.label.localeCompare(b.label);
-    });
-    return envs;
-  }, [
-    activeProject,
-    allProjects,
-    projectGroupingSettings,
-    primaryEnvironmentId,
-    savedEnvironmentRegistry,
-    savedEnvironmentRuntimeById,
-  ]);
-  const hasMultipleEnvironments = logicalProjectEnvironments.length > 1;
 
   useEffect(() => {
     if (!serverThread?.id) return;
@@ -696,6 +579,7 @@ export default function ChatView(props: ChatViewProps) {
   // Use the server config for the thread's environment.  For the primary
   // environment fall back to the global atom; for remote environments use
   // the runtime state stored by the environment manager.
+  const primaryEnvironmentId = usePrimaryEnvironmentId();
   const serverConfig =
     primaryEnvironmentId && activeThread?.environmentId === primaryEnvironmentId
       ? primaryServerConfig
@@ -780,7 +664,6 @@ export default function ChatView(props: ChatViewProps) {
     () => deriveActivePlanState(threadActivities, activeLatestTurn?.turnId ?? undefined),
     [activeLatestTurn?.turnId, threadActivities],
   );
-  const planSidebarLabel = "Tasks";
   const showPlanFollowUpPrompt =
     pendingUserInputs.length === 0 &&
     interactionMode === "plan" &&
@@ -1303,40 +1186,6 @@ export default function ChatView(props: ChatViewProps) {
     ],
   );
 
-  const persistProjectScripts = useCallback(
-    async (input: {
-      projectId: ProjectId;
-      projectCwd: string;
-      previousScripts: ProjectScript[];
-      nextScripts: ProjectScript[];
-      keybinding?: string | null;
-      keybindingCommand: KeybindingCommand;
-    }) => {
-      const api = readEnvironmentApi(environmentId);
-      if (!api) return;
-
-      await api.orchestration.dispatchCommand({
-        type: "project.meta.update",
-        commandId: newCommandId(),
-        projectId: input.projectId,
-        scripts: input.nextScripts,
-      });
-
-      const keybindingRule = decodeProjectScriptKeybindingRule({
-        keybinding: input.keybinding,
-        command: input.keybindingCommand,
-      });
-
-      if (isElectron && keybindingRule) {
-        const localApi = readLocalApi();
-        if (!localApi) {
-          throw new Error("Local API unavailable.");
-        }
-        await localApi.server.upsertKeybinding(keybindingRule);
-      }
-    },
-    [environmentId],
-  );
   const handleInteractionModeChange = useCallback(
     (mode: ProviderInteractionMode) => {
       if (mode === interactionMode) return;
