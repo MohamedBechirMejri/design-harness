@@ -14,6 +14,8 @@ import type { TextGenerationError } from "@t3tools/contracts";
 
 /** Providers that support git text generation (commit messages, PR content, branch names). */
 export type TextGenerationProvider = "codex" | "claudeAgent" | "cursor" | "opencode";
+/* Only codex + claudeAgent still have live implementations; cursor/opencode are accepted
+   in the union for wire-compat and fall through to the Codex branch at runtime. */
 
 export interface CommitMessageGenerationInput {
   cwd: string;

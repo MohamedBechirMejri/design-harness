@@ -45,6 +45,9 @@ const EMPTY_AVAILABLE_EDITORS: ReadonlyArray<EditorId> = [];
 const EMPTY_KEYBINDINGS: ServerConfig["keybindings"] = [];
 const EMPTY_SERVER_PROVIDERS: ReadonlyArray<ServerProvider> = [];
 
+// Design-only build: only Claude + Codex are surfaced to the UI.
+const DESIGN_MODE_ALLOWED_PROVIDERS: ReadonlySet<string> = new Set(["codex", "claudeAgent"]);
+
 const selectAvailableEditors = (config: ServerConfig | null): ReadonlyArray<EditorId> =>
   config?.availableEditors ?? EMPTY_AVAILABLE_EDITORS;
 const selectKeybindings = (config: ServerConfig | null) => config?.keybindings ?? EMPTY_KEYBINDINGS;
@@ -79,9 +82,15 @@ export function getServerConfigUpdatedNotification(): ServerConfigUpdatedNotific
 }
 
 export function setServerConfigSnapshot(config: ServerConfig): void {
-  resolveServerConfig(config);
-  emitProvidersUpdated({ providers: config.providers });
-  emitServerConfigUpdated(toServerConfigUpdatedPayload(config), "snapshot");
+  const filteredConfig: ServerConfig = {
+    ...config,
+    providers: config.providers.filter((provider) =>
+      DESIGN_MODE_ALLOWED_PROVIDERS.has(provider.provider),
+    ),
+  };
+  resolveServerConfig(filteredConfig);
+  emitProvidersUpdated({ providers: filteredConfig.providers });
+  emitServerConfigUpdated(toServerConfigUpdatedPayload(filteredConfig), "snapshot");
 }
 
 export function applyServerConfigEvent(event: ServerConfigStreamEvent): void {
@@ -114,9 +123,21 @@ export function applyServerConfigEvent(event: ServerConfigStreamEvent): void {
   }
 }
 
+function filterDesignModeProviders(
+  payload: ServerProviderUpdatedPayload,
+): ServerProviderUpdatedPayload {
+  return {
+    ...payload,
+    providers: payload.providers.filter((provider) =>
+      DESIGN_MODE_ALLOWED_PROVIDERS.has(provider.provider),
+    ),
+  };
+}
+
 export function applyProvidersUpdated(payload: ServerProviderUpdatedPayload): void {
   const latestServerConfig = getServerConfig();
-  emitProvidersUpdated(payload);
+  const filteredPayload = filterDesignModeProviders(payload);
+  emitProvidersUpdated(filteredPayload);
 
   if (!latestServerConfig) {
     return;
@@ -124,7 +145,7 @@ export function applyProvidersUpdated(payload: ServerProviderUpdatedPayload): vo
 
   const nextConfig = {
     ...latestServerConfig,
-    providers: payload.providers,
+    providers: filteredPayload.providers,
   } satisfies ServerConfig;
   resolveServerConfig(nextConfig);
   emitServerConfigUpdated(toServerConfigUpdatedPayload(nextConfig), "providerStatuses");

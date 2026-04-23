@@ -396,7 +396,7 @@ const make = Effect.gen(function* () {
     readonly messageText: string;
     readonly attachments?: ReadonlyArray<ChatAttachment>;
     readonly modelSelection?: ModelSelection;
-    readonly interactionMode?: "default" | "plan";
+    readonly interactionMode?: "default" | "plan" | "design";
     readonly createdAt: string;
   }) {
     const thread = yield* resolveThread(input.threadId);

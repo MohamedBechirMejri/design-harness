@@ -9,7 +9,14 @@
 import { Schema, Context } from "effect";
 import type { Effect } from "effect";
 
-import type { ProjectWriteFileInput, ProjectWriteFileResult } from "@t3tools/contracts";
+import type {
+  DesignPreviewEntry,
+  DesignPreviewListInput,
+  DesignPreviewReadInput,
+  DesignPreviewReadResult,
+  ProjectWriteFileInput,
+  ProjectWriteFileResult,
+} from "@t3tools/contracts";
 import { WorkspacePathOutsideRootError } from "./WorkspacePaths.ts";
 
 export class WorkspaceFileSystemError extends Schema.TaggedErrorClass<WorkspaceFileSystemError>()(
@@ -37,6 +44,32 @@ export interface WorkspaceFileSystemShape {
     input: ProjectWriteFileInput,
   ) => Effect.Effect<
     ProjectWriteFileResult,
+    WorkspaceFileSystemError | WorkspacePathOutsideRootError
+  >;
+
+  /**
+   * List files written under `.t3code/design/<threadId>/` in the given workspace.
+   *
+   * Returns an empty list if the directory does not exist yet.
+   */
+  readonly listDesignFiles: (input: DesignPreviewListInput) => Effect.Effect<
+    {
+      readonly entries: ReadonlyArray<DesignPreviewEntry>;
+      readonly resolvedAbsolutePath: string;
+      readonly rootExists: boolean;
+    },
+    WorkspaceFileSystemError
+  >;
+
+  /**
+   * Read a single file under `.t3code/design/<threadId>/` as text.
+   *
+   * Rejects relative paths that escape the design directory.
+   */
+  readonly readDesignFile: (
+    input: DesignPreviewReadInput,
+  ) => Effect.Effect<
+    DesignPreviewReadResult,
     WorkspaceFileSystemError | WorkspacePathOutsideRootError
   >;
 }

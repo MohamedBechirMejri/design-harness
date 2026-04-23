@@ -474,15 +474,18 @@ describe("getComposerProviderControls", () => {
   it("hides the interaction mode toggle for OpenCode", () => {
     expect(getComposerProviderControls("opencode")).toEqual({
       showInteractionModeToggle: false,
+      showDesignModeToggle: false,
     });
   });
 
   it("keeps the interaction mode toggle for Codex and Claude", () => {
     expect(getComposerProviderControls("codex")).toEqual({
       showInteractionModeToggle: true,
+      showDesignModeToggle: true,
     });
     expect(getComposerProviderControls("claudeAgent")).toEqual({
       showInteractionModeToggle: true,
+      showDesignModeToggle: true,
     });
   });
 });

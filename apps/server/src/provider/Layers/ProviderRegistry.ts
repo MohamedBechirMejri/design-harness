@@ -9,14 +9,9 @@ import { Effect, Equal, FileSystem, Layer, Path, PubSub, Ref, Stream } from "eff
 import { ServerConfig } from "../../config.ts";
 import { ClaudeProviderLive } from "./ClaudeProvider.ts";
 import { CodexProviderLive } from "./CodexProvider.ts";
-import { CursorProviderLive } from "./CursorProvider.ts";
-import { OpenCodeProviderLive } from "./OpenCodeProvider.ts";
 import { ClaudeProvider } from "../Services/ClaudeProvider.ts";
 import { CodexProvider } from "../Services/CodexProvider.ts";
-import { CursorProvider } from "../Services/CursorProvider.ts";
-import { OpenCodeProvider } from "../Services/OpenCodeProvider.ts";
 import { ProviderRegistry, type ProviderRegistryShape } from "../Services/ProviderRegistry.ts";
-import { OpenCodeRuntimeLive } from "../opencodeRuntime.ts";
 import {
   hydrateCachedProvider,
   PROVIDER_CACHE_IDS,
@@ -91,12 +86,9 @@ const ProviderRegistryLiveBase = Layer.effect(
   Effect.gen(function* () {
     const codexProvider = yield* CodexProvider;
     const claudeProvider = yield* ClaudeProvider;
-    const openCodeProvider = yield* OpenCodeProvider;
     const config = yield* ServerConfig;
     const fileSystem = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
-
-    const cursorProvider = yield* CursorProvider;
 
     const providerSources = [
       {
@@ -110,18 +102,6 @@ const ProviderRegistryLiveBase = Layer.effect(
         getSnapshot: claudeProvider.getSnapshot,
         refresh: claudeProvider.refresh,
         streamChanges: claudeProvider.streamChanges,
-      },
-      {
-        provider: "opencode",
-        getSnapshot: openCodeProvider.getSnapshot,
-        refresh: openCodeProvider.refresh,
-        streamChanges: openCodeProvider.streamChanges,
-      },
-      {
-        provider: "cursor",
-        getSnapshot: cursorProvider.getSnapshot,
-        refresh: cursorProvider.refresh,
-        streamChanges: cursorProvider.streamChanges,
       },
     ] satisfies ReadonlyArray<ProviderSnapshotSource>;
     const activeProviders = PROVIDER_CACHE_IDS;
@@ -173,9 +153,13 @@ const ProviderRegistryLiveBase = Layer.effect(
     );
     const providersRef = yield* Ref.make<ReadonlyArray<ServerProvider>>(cachedProviders);
 
-    const persistProvider = (provider: ServerProvider) =>
-      writeProviderStatusCache({
-        filePath: cachePathByProvider.get(provider.provider)!,
+    const persistProvider = (provider: ServerProvider) => {
+      const filePath = cachePathByProvider.get(
+        provider.provider as (typeof PROVIDER_CACHE_IDS)[number],
+      );
+      if (!filePath) return Effect.void;
+      return writeProviderStatusCache({
+        filePath,
         provider,
       }).pipe(
         Effect.provideService(FileSystem.FileSystem, fileSystem),
@@ -183,6 +167,7 @@ const ProviderRegistryLiveBase = Layer.effect(
         Effect.tapError(Effect.logError),
         Effect.ignore,
       );
+    };
 
     const upsertProviders = Effect.fn("upsertProviders")(function* (
       nextProviders: ReadonlyArray<ServerProvider>,
@@ -284,11 +269,8 @@ const ProviderRegistryLiveBase = Layer.effect(
 export const ProviderRegistryLive = Layer.unwrap(
   Effect.sync(() =>
     ProviderRegistryLiveBase.pipe(
-      Layer.provideMerge(CursorProviderLive),
       Layer.provideMerge(CodexProviderLive),
       Layer.provideMerge(ClaudeProviderLive),
-      Layer.provideMerge(OpenCodeProviderLive),
-      Layer.provideMerge(OpenCodeRuntimeLive),
     ),
   ),
 );

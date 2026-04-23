@@ -10,6 +10,13 @@ import {
   FilesystemBrowseError,
 } from "./filesystem.ts";
 import {
+  DesignPreviewError,
+  DesignPreviewListInput,
+  DesignPreviewListResult,
+  DesignPreviewReadInput,
+  DesignPreviewReadResult,
+} from "./designPreview.ts";
+import {
   GitActionProgressEvent,
   GitCheckoutInput,
   GitCheckoutResult,
@@ -90,6 +97,10 @@ export const WS_METHODS = {
 
   // Filesystem methods
   filesystemBrowse: "filesystem.browse",
+
+  // Design preview methods
+  designPreviewList: "designPreview.list",
+  designPreviewRead: "designPreview.read",
 
   // Git methods
   gitPull: "git.pull",
@@ -177,6 +188,18 @@ export const WsFilesystemBrowseRpc = Rpc.make(WS_METHODS.filesystemBrowse, {
   payload: FilesystemBrowseInput,
   success: FilesystemBrowseResult,
   error: FilesystemBrowseError,
+});
+
+export const WsDesignPreviewListRpc = Rpc.make(WS_METHODS.designPreviewList, {
+  payload: DesignPreviewListInput,
+  success: DesignPreviewListResult,
+  error: DesignPreviewError,
+});
+
+export const WsDesignPreviewReadRpc = Rpc.make(WS_METHODS.designPreviewRead, {
+  payload: DesignPreviewReadInput,
+  success: DesignPreviewReadResult,
+  error: DesignPreviewError,
 });
 
 export const WsSubscribeGitStatusRpc = Rpc.make(WS_METHODS.subscribeGitStatus, {
@@ -365,6 +388,8 @@ export const WsRpcGroup = RpcGroup.make(
   WsProjectsWriteFileRpc,
   WsShellOpenInEditorRpc,
   WsFilesystemBrowseRpc,
+  WsDesignPreviewListRpc,
+  WsDesignPreviewReadRpc,
   WsSubscribeGitStatusRpc,
   WsGitPullRpc,
   WsGitRefreshStatusRpc,

@@ -20,6 +20,12 @@ import type {
 } from "./git.ts";
 import type { FilesystemBrowseInput, FilesystemBrowseResult } from "./filesystem.ts";
 import type {
+  DesignPreviewListInput,
+  DesignPreviewListResult,
+  DesignPreviewReadInput,
+  DesignPreviewReadResult,
+} from "./designPreview.ts";
+import type {
   ProjectSearchEntriesInput,
   ProjectSearchEntriesResult,
   ProjectWriteFileInput,
@@ -247,6 +253,10 @@ export interface EnvironmentApi {
   };
   filesystem: {
     browse: (input: FilesystemBrowseInput) => Promise<FilesystemBrowseResult>;
+  };
+  designPreview: {
+    list: (input: DesignPreviewListInput) => Promise<DesignPreviewListResult>;
+    read: (input: DesignPreviewReadInput) => Promise<DesignPreviewReadResult>;
   };
   git: {
     listBranches: (input: GitListBranchesInput) => Promise<GitListBranchesResult>;

@@ -17,6 +17,7 @@ import {
   ProjectSearchEntriesError,
   ProjectWriteFileError,
   OrchestrationReplayEventsError,
+  DesignPreviewError,
   FilesystemBrowseError,
   ThreadId,
   type TerminalEvent,
@@ -817,6 +818,36 @@ const makeWsRpcLayer = (currentSessionId: AuthSessionId) =>
                     cause,
                   }),
               ),
+            ),
+            { "rpc.aggregate": "workspace" },
+          ),
+        [WS_METHODS.designPreviewList]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.designPreviewList,
+            workspaceFileSystem.listDesignFiles(input).pipe(
+              Effect.mapError(
+                (cause) =>
+                  new DesignPreviewError({
+                    message: `Failed to list design files: ${cause.detail}`,
+                    cause,
+                  }),
+              ),
+            ),
+            { "rpc.aggregate": "workspace" },
+          ),
+        [WS_METHODS.designPreviewRead]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.designPreviewRead,
+            workspaceFileSystem.readDesignFile(input).pipe(
+              Effect.mapError((cause) => {
+                const detail = Schema.is(WorkspacePathOutsideRootError)(cause)
+                  ? "Design file path escaped the workspace root."
+                  : cause.detail;
+                return new DesignPreviewError({
+                  message: `Failed to read design file: ${detail}`,
+                  cause,
+                });
+              }),
             ),
             { "rpc.aggregate": "workspace" },
           ),

@@ -45,6 +45,7 @@ type TraitsRenderInput = {
 
 export type ComposerProviderControls = {
   showInteractionModeToggle: boolean;
+  showDesignModeToggle: boolean;
 };
 
 type ProviderRegistryEntry = {
@@ -139,6 +140,7 @@ function getProviderStateFromCapabilities(
 
 const DEFAULT_PROVIDER_CONTROLS: ComposerProviderControls = {
   showInteractionModeToggle: true,
+  showDesignModeToggle: false,
 };
 
 function createProviderRegistryEntry(
@@ -157,8 +159,8 @@ function createProviderRegistryEntry(
 }
 
 const composerProviderRegistry: Record<ProviderKind, ProviderRegistryEntry> = {
-  codex: createProviderRegistryEntry("codex"),
-  claudeAgent: createProviderRegistryEntry("claudeAgent"),
+  codex: createProviderRegistryEntry("codex", { showDesignModeToggle: true }),
+  claudeAgent: createProviderRegistryEntry("claudeAgent", { showDesignModeToggle: true }),
   cursor: createProviderRegistryEntry("cursor"),
   opencode: createProviderRegistryEntry("opencode", {
     showInteractionModeToggle: false,
