@@ -132,24 +132,6 @@ const PROVIDER_SETTINGS: readonly InstallProviderSettings[] = [
     binaryPlaceholder: "Claude binary path",
     binaryDescription: "Path to the Claude binary",
   },
-  {
-    provider: "cursor",
-    title: "Cursor",
-    badgeLabel: "Early Access",
-    binaryPlaceholder: "Cursor agent binary path",
-    binaryDescription: "Path to the Cursor agent binary",
-  },
-  {
-    provider: "opencode",
-    title: "OpenCode",
-    binaryPlaceholder: "OpenCode binary path",
-    binaryDescription: "Path to the OpenCode binary",
-    serverUrlPlaceholder: "http://127.0.0.1:4096",
-    serverUrlDescription: "Leave blank to let T3 Code spawn the server when needed",
-    serverPasswordPlaceholder: "Server password (optional)",
-    serverPasswordDescription:
-      "If your OpenCode server requires authentication, enter the password here. NOTE: Stored in plain text on disk",
-  },
 ] as const;
 
 const PROVIDER_STATUS_STYLES = {

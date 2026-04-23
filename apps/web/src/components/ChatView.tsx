@@ -1337,25 +1337,6 @@ export default function ChatView(props: ChatViewProps) {
     },
     [environmentId],
   );
-  const handleRuntimeModeChange = useCallback(
-    (mode: RuntimeMode) => {
-      if (mode === runtimeMode) return;
-      setComposerDraftRuntimeMode(composerDraftTarget, mode);
-      if (isLocalDraftThread) {
-        setDraftThreadContext(composerDraftTarget, { runtimeMode: mode });
-      }
-      scheduleComposerFocus();
-    },
-    [
-      isLocalDraftThread,
-      runtimeMode,
-      scheduleComposerFocus,
-      composerDraftTarget,
-      setComposerDraftRuntimeMode,
-      setDraftThreadContext,
-    ],
-  );
-
   const handleInteractionModeChange = useCallback(
     (mode: ProviderInteractionMode) => {
       if (mode === interactionMode) return;
@@ -1374,26 +1355,6 @@ export default function ChatView(props: ChatViewProps) {
       setDraftThreadContext,
     ],
   );
-  const toggleInteractionMode = useCallback(() => {
-    handleInteractionModeChange(interactionMode === "plan" ? "default" : "plan");
-  }, [handleInteractionModeChange, interactionMode]);
-  const toggleDesignMode = useCallback(() => {
-    handleInteractionModeChange(interactionMode === "design" ? "default" : "design");
-  }, [handleInteractionModeChange, interactionMode]);
-  // Design-only build: plan sidebar removed. Stubs retained for callsites.
-  const togglePlanSidebar = useCallback(() => {}, []);
-  const closePlanSidebar = useCallback(() => {}, []);
-
-  const toggleDesignSidebar = useCallback(() => {
-    setDesignSidebarOpen((open) => {
-      if (open) {
-        setDesignSidebarManuallyClosed(true);
-      } else {
-        setDesignSidebarManuallyClosed(false);
-      }
-      return !open;
-    });
-  }, []);
   const closeDesignSidebar = useCallback(() => {
     setDesignSidebarOpen(false);
     setDesignSidebarManuallyClosed(true);
@@ -2765,10 +2726,6 @@ export default function ChatView(props: ChatViewProps) {
               activeProposedPlan={activeProposedPlan}
               activePlan={activePlan as { turnId?: TurnId } | null}
               sidebarProposedPlan={sidebarProposedPlan as { turnId?: TurnId } | null}
-              planSidebarLabel={planSidebarLabel}
-              planSidebarOpen={false}
-              runtimeMode={runtimeMode}
-              interactionMode={interactionMode}
               lockedProvider={lockedProvider}
               providerStatuses={providerStatuses as ServerProvider[]}
               activeProjectDefaultModelSelection={activeProject?.defaultModelSelection}
@@ -2795,13 +2752,7 @@ export default function ChatView(props: ChatViewProps) {
                 onChangeActivePendingUserInputCustomAnswer
               }
               onProviderModelSelect={onProviderModelSelect}
-              toggleInteractionMode={toggleInteractionMode}
-              toggleDesignMode={toggleDesignMode}
-              handleRuntimeModeChange={handleRuntimeModeChange}
               handleInteractionModeChange={handleInteractionModeChange}
-              togglePlanSidebar={togglePlanSidebar}
-              toggleDesignSidebar={toggleDesignSidebar}
-              designSidebarOpen={designSidebarOpen}
               focusComposer={focusComposer}
               scheduleComposerFocus={scheduleComposerFocus}
               setThreadError={setThreadError}

@@ -84,14 +84,7 @@ import { Button } from "../ui/button";
 import { Separator } from "../ui/separator";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { toastManager } from "../ui/toast";
-import {
-  CircleAlertIcon,
-  type LucideIcon,
-  LockIcon,
-  LockOpenIcon,
-  PenLineIcon,
-  XIcon,
-} from "lucide-react";
+import { CircleAlertIcon, XIcon } from "lucide-react";
 import { proposedPlanTitle } from "../../proposedPlan";
 import { resolveSelectableProvider, getProviderModels } from "../../providerModels";
 import type { UnifiedSettings } from "@t3tools/contracts/settings";
@@ -104,28 +97,6 @@ import { searchProviderSkills } from "../../providerSkillSearch";
 
 const IMAGE_SIZE_LIMIT_LABEL = `${Math.round(PROVIDER_SEND_TURN_MAX_IMAGE_BYTES / (1024 * 1024))}MB`;
 
-const runtimeModeConfig: Record<
-  RuntimeMode,
-  { label: string; description: string; icon: LucideIcon }
-> = {
-  "approval-required": {
-    label: "Supervised",
-    description: "Ask before commands and file changes.",
-    icon: LockIcon,
-  },
-  "auto-accept-edits": {
-    label: "Auto-accept edits",
-    description: "Auto-approve edits, ask before other actions.",
-    icon: PenLineIcon,
-  },
-  "full-access": {
-    label: "Full access",
-    description: "Allow commands and edits without prompts.",
-    icon: LockOpenIcon,
-  },
-};
-
-const runtimeModeOptions = Object.keys(runtimeModeConfig) as RuntimeMode[];
 const COMPOSER_PATH_QUERY_DEBOUNCE_MS = 120;
 const EMPTY_PROJECT_ENTRIES: ProjectEntry[] = [];
 
@@ -281,17 +252,12 @@ export interface ChatComposerProps {
   activePendingQuestionIndex: number;
   respondingRequestIds: ApprovalRequestId[];
 
-  // Plan
+  // Plan (design-only build: these still ride through for plan-style
+  // follow-ups but the visible plan sidebar is gone)
   showPlanFollowUpPrompt: boolean;
   activeProposedPlan: Thread["proposedPlans"][number] | null;
   activePlan: { turnId?: TurnId } | null;
   sidebarProposedPlan: { turnId?: TurnId } | null;
-  planSidebarLabel: string;
-  planSidebarOpen: boolean;
-
-  // Mode
-  runtimeMode: RuntimeMode;
-  interactionMode: ProviderInteractionMode;
 
   // Provider / model
   lockedProvider: ProviderKind | null;
@@ -338,13 +304,7 @@ export interface ChatComposerProps {
   ) => void;
 
   onProviderModelSelect: (provider: ProviderKind, model: string) => void;
-  toggleInteractionMode: () => void;
-  toggleDesignMode: () => void;
-  handleRuntimeModeChange: (mode: RuntimeMode) => void;
   handleInteractionModeChange: (mode: ProviderInteractionMode) => void;
-  togglePlanSidebar: () => void;
-  toggleDesignSidebar: () => void;
-  designSidebarOpen: boolean;
 
   focusComposer: () => void;
   scheduleComposerFocus: () => void;
@@ -386,10 +346,6 @@ export const ChatComposer = memo(
       activeProposedPlan,
       activePlan,
       sidebarProposedPlan,
-      planSidebarLabel,
-      planSidebarOpen,
-      runtimeMode,
-      interactionMode,
       lockedProvider,
       providerStatuses,
       activeProjectDefaultModelSelection,
@@ -414,13 +370,7 @@ export const ChatComposer = memo(
       onPreviousActivePendingUserInputQuestion,
       onChangeActivePendingUserInputCustomAnswer,
       onProviderModelSelect,
-      toggleInteractionMode,
-      toggleDesignMode,
-      handleRuntimeModeChange,
       handleInteractionModeChange,
-      togglePlanSidebar,
-      toggleDesignSidebar,
-      designSidebarOpen,
       focusComposer,
       scheduleComposerFocus,
       setThreadError,
@@ -710,7 +660,7 @@ export const ChatComposer = memo(
       (showPlanFollowUpPrompt && activeProposedPlan !== null);
 
     const composerFooterHasWideActions = showPlanFollowUpPrompt || activePendingProgress !== null;
-    const showPlanSidebarToggle = Boolean(activePlan || sidebarProposedPlan || planSidebarOpen);
+    const showPlanSidebarToggle = false;
     const composerFooterActionLayoutKey = useMemo(() => {
       if (activePendingProgress) {
         return `pending:${activePendingProgress.questionIndex}:${activePendingProgress.isLastQuestion}:${activePendingIsResponding}`;
@@ -1337,7 +1287,7 @@ export const ChatComposer = memo(
       event: KeyboardEvent,
     ) => {
       if (key === "Tab" && event.shiftKey) {
-        toggleInteractionMode();
+        // Design-only build: Shift+Tab mode switch is gone; treat as no-op.
         return true;
       }
       const { trigger } = resolveActiveComposerTrigger();
