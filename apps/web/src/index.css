@@ -5,9 +5,15 @@
 @custom-variant wco (&:is(.wco, .wco *));
 
 @theme inline {
-  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-  --font-serif: "Fraunces", "Iowan Old Style", "Apple Garamond", Georgia, serif;
-  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", "SFMono-Regular", Consolas, monospace;
+  --font-sans: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --font-serif: "Instrument Serif", "Iowan Old Style", "Apple Garamond", Georgia, serif;
+  --font-mono: "Geist Mono", ui-monospace, "SF Mono", "SFMono-Regular", Consolas, monospace;
+
+  --text-xs: 0.8125rem;
+  --text-sm: 0.9375rem;
+  --text-base: 1.0625rem;
+  --text-lg: 1.1875rem;
+  --text-xl: 1.375rem;
 
   --animate-skeleton: skeleton 2s -1s infinite linear;
 
@@ -31,6 +37,8 @@
   --color-accent-soft: var(--accent-soft);
   --color-brand: var(--brand);
   --color-brand-foreground: var(--brand-foreground);
+  --color-brand-alt: var(--brand-alt);
+  --color-brand-alt-foreground: var(--brand-alt-foreground);
 
   --color-border: var(--border);
   --color-border-strong: var(--border-strong);
@@ -75,14 +83,18 @@
     @apply text-foreground relative;
     background-color: var(--background);
     font-family: var(--font-sans);
-    font-feature-settings: "cv11", "ss01", "ss03";
+    font-feature-settings: "ss01", "cv11";
+    font-size: 1rem;
+    line-height: 1.55;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
   }
   .font-display {
     font-family: var(--font-serif);
+    font-weight: 400;
     font-optical-sizing: auto;
-    letter-spacing: -0.01em;
+    letter-spacing: -0.015em;
   }
 }
 
@@ -97,82 +109,86 @@
 
 :root {
   color-scheme: light;
-  --radius: 0.625rem;
+  --radius: 0.75rem;
 
-  /* Warm editorial palette (light) */
-  --background: #faf9f5;
-  --surface: #ffffff;
+  /* Paper palette — editorial warm cream, rust primary, olive secondary accent */
+  --background: #f7f4ec;
+  --surface: #fdfcf7;
   --surface-raised: #ffffff;
-  --foreground: #141413;
-  --card: #ffffff;
-  --card-foreground: #141413;
-  --popover: #ffffff;
-  --popover-foreground: #141413;
+  --foreground: #1c1b19;
+  --card: #fdfcf7;
+  --card-foreground: #1c1b19;
+  --popover: #fdfcf7;
+  --popover-foreground: #1c1b19;
 
-  --primary: #d97757;
-  --primary-foreground: #ffffff;
-  --secondary: #f1efe7;
-  --secondary-foreground: #141413;
-  --muted: #f1efe7;
-  --muted-foreground: #7c7a6f;
-  --accent: #ede9de;
-  --accent-foreground: #141413;
-  --accent-soft: oklch(0.96 0.04 45);
-  --brand: #d97757;
-  --brand-foreground: #ffffff;
+  --primary: #b54a26;
+  --primary-foreground: #fdfcf7;
+  --secondary: #edeae0;
+  --secondary-foreground: #1c1b19;
+  --muted: #ede9dd;
+  --muted-foreground: #716e61;
+  --accent: #e6e1d2;
+  --accent-foreground: #1c1b19;
+  --accent-soft: oklch(0.94 0.055 45);
+  --brand: #b54a26;
+  --brand-foreground: #fdfcf7;
+  --brand-alt: #4a5c3a;
+  --brand-alt-foreground: #fdfcf7;
 
-  --border: #e8e6dc;
-  --border-strong: #d6d3c7;
-  --input: #e8e6dc;
-  --ring: #d97757;
+  --border: #e0dbc9;
+  --border-strong: #c9c3ac;
+  --input: #e0dbc9;
+  --ring: #b54a26;
 
-  --destructive: #c03b3b;
-  --destructive-foreground: #ffffff;
-  --info: #6a9bcc;
-  --info-foreground: #3a6aa0;
-  --success: #788c5d;
-  --success-foreground: #4c5c3a;
-  --warning: #c68b3a;
-  --warning-foreground: #875d1e;
+  --destructive: #b33232;
+  --destructive-foreground: #fdfcf7;
+  --info: #5a7fa8;
+  --info-foreground: #32557e;
+  --success: #4a5c3a;
+  --success-foreground: #2f3d24;
+  --warning: #b8802e;
+  --warning-foreground: #7a5312;
 
   @variant dark {
     color-scheme: dark;
 
-    /* Warm editorial palette (dark) */
-    --background: #1a1917;
-    --surface: #221f1c;
-    --surface-raised: #252320;
-    --foreground: #f4f2ec;
-    --card: #221f1c;
-    --card-foreground: #f4f2ec;
-    --popover: #252320;
-    --popover-foreground: #f4f2ec;
+    /* Paper palette (dark) — warm charcoal, rust softened */
+    --background: #161411;
+    --surface: #1e1b16;
+    --surface-raised: #242118;
+    --foreground: #f2eee3;
+    --card: #1e1b16;
+    --card-foreground: #f2eee3;
+    --popover: #242118;
+    --popover-foreground: #f2eee3;
 
-    --primary: #e88b6d;
-    --primary-foreground: #1a1917;
-    --secondary: #2a2723;
-    --secondary-foreground: #f4f2ec;
-    --muted: #2a2723;
-    --muted-foreground: #a8a393;
-    --accent: #302d28;
-    --accent-foreground: #f4f2ec;
-    --accent-soft: oklch(0.32 0.05 45);
-    --brand: #e88b6d;
-    --brand-foreground: #1a1917;
+    --primary: #e5805e;
+    --primary-foreground: #161411;
+    --secondary: #29251e;
+    --secondary-foreground: #f2eee3;
+    --muted: #29251e;
+    --muted-foreground: #9a9586;
+    --accent: #332f26;
+    --accent-foreground: #f2eee3;
+    --accent-soft: oklch(0.3 0.06 45);
+    --brand: #e5805e;
+    --brand-foreground: #161411;
+    --brand-alt: #8ea175;
+    --brand-alt-foreground: #161411;
 
-    --border: #35322c;
-    --border-strong: #4a463e;
-    --input: #35322c;
-    --ring: #e88b6d;
+    --border: #332f26;
+    --border-strong: #4a453a;
+    --input: #332f26;
+    --ring: #e5805e;
 
-    --destructive: #d96b6b;
-    --destructive-foreground: #1a1917;
-    --info: #8ab4de;
-    --info-foreground: #c6dbf2;
-    --success: #95a87b;
-    --success-foreground: #cad7b7;
+    --destructive: #db6a6a;
+    --destructive-foreground: #161411;
+    --info: #8ab3de;
+    --info-foreground: #c5d9f1;
+    --success: #a2b587;
+    --success-foreground: #d1dcbf;
     --warning: #d9a562;
-    --warning-foreground: #f0d3a2;
+    --warning-foreground: #efd1a3;
   }
 }
 
