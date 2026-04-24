@@ -1,6 +1,18 @@
 import { ArrowUpRightIcon } from "lucide-react";
+import { useRouter } from "@tanstack/react-router";
+import { useCallback } from "react";
+
 import { SidebarInset } from "./ui/sidebar";
 import { AppTopBar } from "./AppTopBar";
+import { type DraftId, useComposerDraftStore } from "../composerDraftStore";
+import { useHandleNewThread } from "../hooks/useHandleNewThread";
+import {
+  resolveThreadActionProjectRef,
+  startNewLocalThreadFromContext,
+} from "../lib/chatThreadActions";
+import { resolveSidebarNewThreadEnvMode } from "./Sidebar.logic";
+import { useSettings } from "../hooks/useSettings";
+import { resolveThreadRouteTarget } from "../threadRoutes";
 
 const STARTER_PROMPTS = [
   "A bookmark manager, neo-brutalist",
@@ -10,6 +22,47 @@ const STARTER_PROMPTS = [
 ];
 
 export function NoActiveThreadState() {
+  const router = useRouter();
+  const { activeDraftThread, activeThread, defaultProjectRef, handleNewThread } =
+    useHandleNewThread();
+  const appSettings = useSettings();
+  const defaultThreadEnvMode = resolveSidebarNewThreadEnvMode({
+    defaultEnvMode: appSettings.defaultThreadEnvMode,
+  });
+
+  const startFromPrompt = useCallback(
+    async (prompt: string) => {
+      const context = {
+        activeDraftThread,
+        activeThread,
+        defaultProjectRef,
+        defaultThreadEnvMode,
+        handleNewThread,
+      };
+      const projectRef = resolveThreadActionProjectRef(context);
+      if (!projectRef) {
+        return;
+      }
+      const started = await startNewLocalThreadFromContext(context);
+      if (!started) return;
+      const latestMatch = router.state.matches[router.state.matches.length - 1];
+      const target = latestMatch ? resolveThreadRouteTarget(latestMatch.params ?? {}) : null;
+      if (target?.kind === "draft") {
+        useComposerDraftStore.getState().setPrompt(target.draftId as DraftId, prompt);
+      }
+    },
+    [
+      activeDraftThread,
+      activeThread,
+      defaultProjectRef,
+      defaultThreadEnvMode,
+      handleNewThread,
+      router,
+    ],
+  );
+
+  const canStart = defaultProjectRef !== null;
+
   return (
     <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none bg-background text-foreground">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden bg-background">
@@ -46,18 +99,24 @@ export function NoActiveThreadState() {
                   <li key={example}>
                     <button
                       type="button"
-                      className="group flex w-full items-center justify-between gap-3 rounded-xl border border-transparent bg-background px-4 py-3 text-left text-[15px] text-foreground transition-colors hover:border-border-strong hover:bg-accent/70"
+                      onClick={() => void startFromPrompt(example)}
+                      disabled={!canStart}
+                      className="group flex w-full items-center justify-between gap-3 rounded-xl border border-transparent bg-background px-4 py-3 text-left text-[15px] text-foreground transition-colors hover:border-border-strong hover:bg-accent/70 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:border-transparent disabled:hover:bg-background"
                     >
                       <span className="font-display italic text-[17px] leading-tight">
                         {example}
                       </span>
-                      <ArrowUpRightIcon className="size-4 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+                      <ArrowUpRightIcon className="size-4 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-disabled:!opacity-0" />
                     </button>
                   </li>
                 ))}
               </ul>
               <div className="mt-6 flex items-center justify-center gap-2 text-[13px] text-muted-foreground">
-                <span>Start a new design from the sidebar, or press</span>
+                <span>
+                  {canStart
+                    ? "Pick a prompt, or press"
+                    : "Add a project from the sidebar, then press"}
+                </span>
                 <kbd className="rounded-md border border-border bg-background px-2 py-0.5 font-mono text-[11px] font-medium text-foreground">
                   ⌘N
                 </kbd>
