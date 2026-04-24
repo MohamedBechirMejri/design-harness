@@ -1,7 +1,4 @@
 import {
-  type GitActionProgressEvent,
-  type GitRunStackedActionInput,
-  type GitRunStackedActionResult,
   type GitStatusResult,
   type GitStatusStreamEvent,
   type LocalApi,
@@ -48,10 +45,6 @@ type RpcInputStreamMethod<TTag extends RpcTag> =
       ) => () => void
     : never;
 
-interface GitRunStackedActionOptions {
-  readonly onProgress?: (event: GitActionProgressEvent) => void;
-}
-
 export interface WsRpcClient {
   readonly dispose: () => Promise<void>;
   readonly reconnect: () => Promise<void>;
@@ -89,20 +82,7 @@ export interface WsRpcClient {
       listener: (status: GitStatusResult) => void,
       options?: StreamSubscriptionOptions,
     ) => () => void;
-    readonly runStackedAction: (
-      input: GitRunStackedActionInput,
-      options?: GitRunStackedActionOptions,
-    ) => Promise<GitRunStackedActionResult>;
     readonly listBranches: RpcUnaryMethod<typeof WS_METHODS.gitListBranches>;
-    readonly createWorktree: RpcUnaryMethod<typeof WS_METHODS.gitCreateWorktree>;
-    readonly removeWorktree: RpcUnaryMethod<typeof WS_METHODS.gitRemoveWorktree>;
-    readonly createBranch: RpcUnaryMethod<typeof WS_METHODS.gitCreateBranch>;
-    readonly checkout: RpcUnaryMethod<typeof WS_METHODS.gitCheckout>;
-    readonly init: RpcUnaryMethod<typeof WS_METHODS.gitInit>;
-    readonly resolvePullRequest: RpcUnaryMethod<typeof WS_METHODS.gitResolvePullRequest>;
-    readonly preparePullRequestThread: RpcUnaryMethod<
-      typeof WS_METHODS.gitPreparePullRequestThread
-    >;
   };
   readonly server: {
     readonly getConfig: RpcUnaryNoArgMethod<typeof WS_METHODS.serverGetConfig>;
@@ -178,39 +158,8 @@ export function createWsRpcClient(transport: WsTransport): WsRpcClient {
           options,
         );
       },
-      runStackedAction: async (input, options) => {
-        let result: GitRunStackedActionResult | null = null;
-
-        await transport.requestStream(
-          (client) => client[WS_METHODS.gitRunStackedAction](input),
-          (event) => {
-            options?.onProgress?.(event);
-            if (event.kind === "action_finished") {
-              result = event.result;
-            }
-          },
-        );
-
-        if (result) {
-          return result;
-        }
-
-        throw new Error("Git action stream completed without a final result.");
-      },
       listBranches: (input) =>
         transport.request((client) => client[WS_METHODS.gitListBranches](input)),
-      createWorktree: (input) =>
-        transport.request((client) => client[WS_METHODS.gitCreateWorktree](input)),
-      removeWorktree: (input) =>
-        transport.request((client) => client[WS_METHODS.gitRemoveWorktree](input)),
-      createBranch: (input) =>
-        transport.request((client) => client[WS_METHODS.gitCreateBranch](input)),
-      checkout: (input) => transport.request((client) => client[WS_METHODS.gitCheckout](input)),
-      init: (input) => transport.request((client) => client[WS_METHODS.gitInit](input)),
-      resolvePullRequest: (input) =>
-        transport.request((client) => client[WS_METHODS.gitResolvePullRequest](input)),
-      preparePullRequestThread: (input) =>
-        transport.request((client) => client[WS_METHODS.gitPreparePullRequestThread](input)),
     },
     server: {
       getConfig: () => transport.request((client) => client[WS_METHODS.serverGetConfig]({})),

@@ -1,22 +1,10 @@
 import type {
-  GitCheckoutInput,
-  GitCheckoutResult,
-  GitCreateBranchInput,
-  GitPreparePullRequestThreadInput,
-  GitPreparePullRequestThreadResult,
-  GitPullRequestRefInput,
-  GitCreateWorktreeInput,
-  GitCreateWorktreeResult,
-  GitInitInput,
   GitListBranchesInput,
   GitListBranchesResult,
   GitPullInput,
   GitPullResult,
-  GitRemoveWorktreeInput,
-  GitResolvePullRequestResult,
   GitStatusInput,
   GitStatusResult,
-  GitCreateBranchResult,
 } from "./git.ts";
 import type { FilesystemBrowseInput, FilesystemBrowseResult } from "./filesystem.ts";
 import type {
@@ -260,15 +248,6 @@ export interface EnvironmentApi {
   };
   git: {
     listBranches: (input: GitListBranchesInput) => Promise<GitListBranchesResult>;
-    createWorktree: (input: GitCreateWorktreeInput) => Promise<GitCreateWorktreeResult>;
-    removeWorktree: (input: GitRemoveWorktreeInput) => Promise<void>;
-    createBranch: (input: GitCreateBranchInput) => Promise<GitCreateBranchResult>;
-    checkout: (input: GitCheckoutInput) => Promise<GitCheckoutResult>;
-    init: (input: GitInitInput) => Promise<void>;
-    resolvePullRequest: (input: GitPullRequestRefInput) => Promise<GitResolvePullRequestResult>;
-    preparePullRequestThread: (
-      input: GitPreparePullRequestThreadInput,
-    ) => Promise<GitPreparePullRequestThreadResult>;
     pull: (input: GitPullInput) => Promise<GitPullResult>;
     refreshStatus: (input: GitStatusInput) => Promise<GitStatusResult>;
     onStatus: (
