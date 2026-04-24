@@ -3,7 +3,7 @@ import os from "node:os";
 import { assert, expect, it } from "@effect/vitest";
 import { ConfigProvider, Effect, FileSystem, Layer, Option, Path } from "effect";
 
-import { NetService } from "@t3tools/shared/Net";
+import { NetService } from "@dh/shared/Net";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { deriveServerPaths } from "./config.ts";
 import { resolveServerConfig } from "./cli.ts";
@@ -54,15 +54,15 @@ it.layer(NodeServices.layer)("cli config resolution", (it) => {
             ConfigProvider.layer(
               ConfigProvider.fromEnv({
                 env: {
-                  T3CODE_LOG_LEVEL: "Warn",
-                  T3CODE_MODE: "desktop",
-                  T3CODE_PORT: "4001",
-                  T3CODE_HOST: "0.0.0.0",
-                  T3CODE_HOME: baseDir,
+                  DH_LOG_LEVEL: "Warn",
+                  DH_MODE: "desktop",
+                  DH_PORT: "4001",
+                  DH_HOST: "0.0.0.0",
+                  DH_HOME: baseDir,
                   VITE_DEV_SERVER_URL: "http://127.0.0.1:5173",
-                  T3CODE_NO_BROWSER: "true",
-                  T3CODE_AUTO_BOOTSTRAP_PROJECT_FROM_CWD: "false",
-                  T3CODE_LOG_WS_EVENTS: "true",
+                  DH_NO_BROWSER: "true",
+                  DH_AUTO_BOOTSTRAP_PROJECT_FROM_CWD: "false",
+                  DH_LOG_WS_EVENTS: "true",
                 },
               }),
             ),
@@ -116,15 +116,15 @@ it.layer(NodeServices.layer)("cli config resolution", (it) => {
             ConfigProvider.layer(
               ConfigProvider.fromEnv({
                 env: {
-                  T3CODE_LOG_LEVEL: "Warn",
-                  T3CODE_MODE: "desktop",
-                  T3CODE_PORT: "4001",
-                  T3CODE_HOST: "0.0.0.0",
-                  T3CODE_HOME: join(os.tmpdir(), "ignored-base"),
+                  DH_LOG_LEVEL: "Warn",
+                  DH_MODE: "desktop",
+                  DH_PORT: "4001",
+                  DH_HOST: "0.0.0.0",
+                  DH_HOME: join(os.tmpdir(), "ignored-base"),
                   VITE_DEV_SERVER_URL: "http://127.0.0.1:5173",
-                  T3CODE_NO_BROWSER: "false",
-                  T3CODE_AUTO_BOOTSTRAP_PROJECT_FROM_CWD: "false",
-                  T3CODE_LOG_WS_EVENTS: "false",
+                  DH_NO_BROWSER: "false",
+                  DH_AUTO_BOOTSTRAP_PROJECT_FROM_CWD: "false",
+                  DH_LOG_WS_EVENTS: "false",
                 },
               }),
             ),
@@ -184,10 +184,10 @@ it.layer(NodeServices.layer)("cli config resolution", (it) => {
             ConfigProvider.layer(
               ConfigProvider.fromEnv({
                 env: {
-                  T3CODE_BOOTSTRAP_FD: String(fd),
-                  T3CODE_NO_BROWSER: "true",
-                  T3CODE_AUTO_BOOTSTRAP_PROJECT_FROM_CWD: "true",
-                  T3CODE_LOG_WS_EVENTS: "true",
+                  DH_BOOTSTRAP_FD: String(fd),
+                  DH_NO_BROWSER: "true",
+                  DH_AUTO_BOOTSTRAP_PROJECT_FROM_CWD: "true",
+                  DH_LOG_WS_EVENTS: "true",
                 },
               }),
             ),
@@ -254,7 +254,7 @@ it.layer(NodeServices.layer)("cli config resolution", (it) => {
             ConfigProvider.layer(
               ConfigProvider.fromEnv({
                 env: {
-                  T3CODE_BOOTSTRAP_FD: String(fd),
+                  DH_BOOTSTRAP_FD: String(fd),
                 },
               }),
             ),
@@ -368,12 +368,12 @@ it.layer(NodeServices.layer)("cli config resolution", (it) => {
             ConfigProvider.layer(
               ConfigProvider.fromEnv({
                 env: {
-                  T3CODE_MODE: "web",
-                  T3CODE_BOOTSTRAP_FD: String(fd),
-                  T3CODE_HOME: baseDir,
-                  T3CODE_NO_BROWSER: "true",
-                  T3CODE_AUTO_BOOTSTRAP_PROJECT_FROM_CWD: "true",
-                  T3CODE_LOG_WS_EVENTS: "true",
+                  DH_MODE: "web",
+                  DH_BOOTSTRAP_FD: String(fd),
+                  DH_HOME: baseDir,
+                  DH_NO_BROWSER: "true",
+                  DH_AUTO_BOOTSTRAP_PROJECT_FROM_CWD: "true",
+                  DH_LOG_WS_EVENTS: "true",
                 },
               }),
             ),
@@ -495,8 +495,8 @@ it.layer(NodeServices.layer)("cli config resolution", (it) => {
             ConfigProvider.layer(
               ConfigProvider.fromEnv({
                 env: {
-                  T3CODE_NO_BROWSER: "false",
-                  T3CODE_AUTO_BOOTSTRAP_PROJECT_FROM_CWD: "true",
+                  DH_NO_BROWSER: "false",
+                  DH_AUTO_BOOTSTRAP_PROJECT_FROM_CWD: "true",
                 },
               }),
             ),

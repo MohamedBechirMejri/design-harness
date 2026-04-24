@@ -11,12 +11,12 @@ import type {
   ServerProvider,
   ThreadId,
   TurnId,
-} from "@t3tools/contracts";
+} from "@dh/contracts";
 import {
   PROVIDER_SEND_TURN_MAX_ATTACHMENTS,
   PROVIDER_SEND_TURN_MAX_IMAGE_BYTES,
-} from "@t3tools/contracts";
-import { createModelSelection, normalizeModelSlug } from "@t3tools/shared/model";
+} from "@dh/contracts";
+import { createModelSelection, normalizeModelSlug } from "@dh/shared/model";
 import {
   forwardRef,
   memo,
@@ -85,7 +85,7 @@ import { toastManager } from "../ui/toast";
 import { CircleAlertIcon, XIcon } from "lucide-react";
 import { proposedPlanTitle } from "../../proposedPlan";
 import { resolveSelectableProvider, getProviderModels } from "../../providerModels";
-import type { UnifiedSettings } from "@t3tools/contracts/settings";
+import type { UnifiedSettings } from "@dh/contracts/settings";
 import type { SessionPhase, Thread } from "../../types";
 import type { PendingUserInputDraftAnswer } from "../../pendingUserInput";
 import type { PendingApproval, PendingUserInput } from "../../session-logic";

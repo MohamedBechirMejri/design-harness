@@ -7,7 +7,7 @@ import {
   PanelRightCloseIcon,
   RefreshCwIcon,
 } from "lucide-react";
-import type { DesignPreviewEntry, EnvironmentId, ThreadId } from "@t3tools/contracts";
+import type { DesignPreviewEntry, EnvironmentId, ThreadId } from "@dh/contracts";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { ScrollArea } from "./ui/scroll-area";

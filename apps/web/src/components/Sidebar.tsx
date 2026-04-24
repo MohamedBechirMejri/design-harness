@@ -38,19 +38,16 @@ import {
   type SidebarProjectGroupingMode,
   type ThreadEnvMode,
   ThreadId,
-} from "@t3tools/contracts";
+} from "@dh/contracts";
 import {
   parseScopedThreadKey,
   scopedProjectKey,
   scopedThreadKey,
   scopeProjectRef,
   scopeThreadRef,
-} from "@t3tools/client-runtime";
+} from "@dh/client-runtime";
 import { Link, useLocation, useNavigate, useParams, useRouter } from "@tanstack/react-router";
-import {
-  type SidebarProjectSortOrder,
-  type SidebarThreadSortOrder,
-} from "@t3tools/contracts/settings";
+import { type SidebarProjectSortOrder, type SidebarThreadSortOrder } from "@dh/contracts/settings";
 import { usePrimaryEnvironmentId } from "../environments/primary";
 import { isElectron } from "../env";
 import { APP_STAGE_LABEL, APP_VERSION } from "../branding";
@@ -2166,7 +2163,7 @@ const SidebarProjectListRow = memo(function SidebarProjectListRow(props: Sidebar
 function T3Wordmark() {
   return (
     <svg
-      aria-label="T3"
+      aria-label="Design Harness"
       className="h-2.5 w-auto shrink-0 text-foreground"
       viewBox="15.5309 37 94.3941 56.96"
       xmlns="http://www.w3.org/2000/svg"

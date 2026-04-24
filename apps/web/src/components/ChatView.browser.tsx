@@ -16,8 +16,8 @@ import {
   WS_METHODS,
   OrchestrationSessionStatus,
   DEFAULT_SERVER_SETTINGS,
-} from "@t3tools/contracts";
-import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime";
+} from "@dh/contracts";
+import { scopedThreadKey, scopeThreadRef } from "@dh/client-runtime";
 import { RouterProvider, createMemoryHistory } from "@tanstack/react-router";
 import { HttpResponse, http, ws } from "msw";
 import { setupWorker } from "msw/browser";
@@ -53,7 +53,7 @@ import { useUiStateStore } from "../uiStateStore";
 import { createAuthenticatedSessionHandlers } from "../../test/authHttpHandlers";
 import { BrowserWsRpcHarness, type NormalizedWsRpcRequestBody } from "../../test/wsRpcHarness";
 
-import { DEFAULT_CLIENT_SETTINGS } from "@t3tools/contracts/settings";
+import { DEFAULT_CLIENT_SETTINGS } from "@dh/contracts/settings";
 
 vi.mock("../lib/gitStatusState", () => ({
   useGitStatus: () => ({ data: null, error: null, cause: null, isPending: false }),
@@ -160,7 +160,7 @@ function createBaseServerConfig(): ServerConfig {
       sessionCookieName: "t3_session",
     },
     cwd: "/repo/project",
-    keybindingsConfigPath: "/repo/project/.t3code-keybindings.json",
+    keybindingsConfigPath: "/repo/project/.dh-keybindings.json",
     keybindings: [],
     issues: [],
     providers: [
@@ -4702,7 +4702,7 @@ describe("ChatView timeline estimator parity (full app)", () => {
       snapshot: createSnapshotWithPlanFollowUpPrompt({
         modelSelection: { provider: "codex", model: "gpt-5.3-codex-spark" },
         planMarkdown:
-          "# Imaginary Long-Range Plan: T3 Code Adaptive Orchestration and Safe-Delay Execution Initiative",
+          "# Imaginary Long-Range Plan: Design Harness Adaptive Orchestration and Safe-Delay Execution Initiative",
       }),
     });
 
@@ -4732,7 +4732,7 @@ describe("ChatView timeline estimator parity (full app)", () => {
       snapshot: createSnapshotWithPlanFollowUpPrompt({
         modelSelection: { provider: "codex", model: "gpt-5.3-codex-spark" },
         planMarkdown:
-          "# Imaginary Long-Range Plan: T3 Code Adaptive Orchestration and Safe-Delay Execution Initiative",
+          "# Imaginary Long-Range Plan: Design Harness Adaptive Orchestration and Safe-Delay Execution Initiative",
       }),
     });
 

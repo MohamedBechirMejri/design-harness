@@ -17,11 +17,11 @@ import {
   type ProviderKind,
   type ServerProvider,
   type ServerProviderModel,
-} from "@t3tools/contracts";
-import { scopeThreadRef } from "@t3tools/client-runtime";
-import { DEFAULT_UNIFIED_SETTINGS } from "@t3tools/contracts/settings";
-import { normalizeModelSlug } from "@t3tools/shared/model";
-import { createModelSelection } from "@t3tools/shared/model";
+} from "@dh/contracts";
+import { scopeThreadRef } from "@dh/client-runtime";
+import { DEFAULT_UNIFIED_SETTINGS } from "@dh/contracts/settings";
+import { normalizeModelSlug } from "@dh/shared/model";
+import { createModelSelection } from "@dh/shared/model";
 import { Equal } from "effect";
 import { APP_VERSION } from "../../branding";
 import {
@@ -160,7 +160,8 @@ function getProviderSummary(provider: ServerProvider | undefined) {
     return {
       headline: "Disabled",
       detail:
-        provider.message ?? "This provider is installed but disabled for new sessions in T3 Code.",
+        provider.message ??
+        "This provider is installed but disabled for new sessions in Design Harness.",
     };
   }
   if (!provider.installed) {
@@ -794,7 +795,7 @@ export function GeneralSettingsPanel() {
       <SettingsSection title="General">
         <SettingsRow
           title="Theme"
-          description="Choose how T3 Code looks across the app."
+          description="Choose how Design Harness looks across the app."
           resetAction={
             theme !== "system" ? (
               <SettingResetButton label="theme" onClick={() => setTheme("system")} />

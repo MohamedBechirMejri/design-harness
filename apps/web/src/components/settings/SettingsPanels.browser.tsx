@@ -11,7 +11,7 @@ import {
   type DesktopUpdateState,
   type LocalApi,
   type ServerConfig,
-} from "@t3tools/contracts";
+} from "@dh/contracts";
 import { DateTime } from "effect";
 import { page } from "vitest/browser";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -185,7 +185,7 @@ function createBaseServerConfig(): ServerConfig {
       sessionCookieName: "t3_session",
     },
     cwd: "/repo/project",
-    keybindingsConfigPath: "/repo/project/.t3code-keybindings.json",
+    keybindingsConfigPath: "/repo/project/.dh-keybindings.json",
     keybindings: [],
     issues: [],
     providers: [],
@@ -669,7 +669,9 @@ describe("GeneralSettingsPanel observability", () => {
     await networkAccessToggle.click();
     await expect.element(page.getByText("Enable network access?")).toBeInTheDocument();
     await expect
-      .element(page.getByText("T3 Code will restart to expose this environment over the network."))
+      .element(
+        page.getByText("Design Harness will restart to expose this environment over the network."),
+      )
       .toBeInTheDocument();
     await page.getByRole("button", { name: "Restart and enable", exact: true }).click();
     await vi.waitFor(() => {

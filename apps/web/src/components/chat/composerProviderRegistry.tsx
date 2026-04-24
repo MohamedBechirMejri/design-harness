@@ -3,13 +3,13 @@ import {
   type ProviderModelOptions,
   type ScopedThreadRef,
   type ServerProviderModel,
-} from "@t3tools/contracts";
+} from "@dh/contracts";
 import {
   isClaudeUltrathinkPrompt,
   normalizeProviderModelOptionsWithCapabilities,
   resolveEffort,
   trimOrNull,
-} from "@t3tools/shared/model";
+} from "@dh/shared/model";
 import type { ReactNode } from "react";
 
 import type { DraftId } from "../../composerDraftStore";

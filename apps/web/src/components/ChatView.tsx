@@ -14,10 +14,10 @@ import {
   OrchestrationThreadActivity,
   ProviderInteractionMode,
   RuntimeMode,
-} from "@t3tools/contracts";
-import { scopedThreadKey, scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime";
-import { applyClaudePromptEffortPrefix, createModelSelection } from "@t3tools/shared/model";
-import { truncate } from "@t3tools/shared/String";
+} from "@dh/contracts";
+import { scopedThreadKey, scopeProjectRef, scopeThreadRef } from "@dh/client-runtime";
+import { applyClaudePromptEffortPrefix, createModelSelection } from "@dh/shared/model";
+import { truncate } from "@dh/shared/String";
 import { Debouncer } from "@tanstack/react-pacer";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";

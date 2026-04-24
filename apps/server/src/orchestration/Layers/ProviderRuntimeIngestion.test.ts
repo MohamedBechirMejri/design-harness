@@ -2,11 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import type {
-  OrchestrationReadModel,
-  ProviderRuntimeEvent,
-  ProviderSession,
-} from "@t3tools/contracts";
+import type { OrchestrationReadModel, ProviderRuntimeEvent, ProviderSession } from "@dh/contracts";
 import {
   ApprovalRequestId,
   CommandId,
@@ -18,7 +14,7 @@ import {
   type ServerSettings,
   ThreadId,
   TurnId,
-} from "@t3tools/contracts";
+} from "@dh/contracts";
 import { Effect, Exit, Layer, ManagedRuntime, PubSub, Scope, Stream } from "effect";
 import { afterEach, describe, expect, it } from "vitest";
 

@@ -5,11 +5,11 @@
  *   1. User sends a design idea.
  *   2. Assistant responds with a JSON block of questions (no HTML yet).
  *   3. User answers via a structured form that compiles into a reply.
- *   4. Assistant writes/updates HTML files under .t3code/design/<threadId>/.
+ *   4. Assistant writes/updates HTML files under .dh/design/<threadId>/.
  *   5. Repeat from (2) when the user comments further.
  */
 
-export const DESIGN_MODE_OUTPUT_SUBDIR = ".t3code/design";
+export const DESIGN_MODE_OUTPUT_SUBDIR = ".dh/design";
 
 export const DESIGN_QUESTIONS_BLOCK_TAG_OPEN = "<design_questions>";
 export const DESIGN_QUESTIONS_BLOCK_TAG_CLOSE = "</design_questions>";

@@ -1,11 +1,11 @@
-# T3 Code
+# Design Harness
 
-T3 Code is a minimal web GUI for coding agents (currently Codex and Claude, more coming soon).
+Design Harness is a minimal web GUI for coding agents (currently Codex and Claude, more coming soon).
 
 ## Installation
 
 > [!WARNING]
-> T3 Code currently supports Codex and Claude.
+> Design Harness currently supports Codex and Claude.
 > Install and authenticate at least one provider before use:
 >
 > - Codex: install [Codex CLI](https://github.com/openai/codex) and run `codex login`
@@ -24,7 +24,7 @@ Install the latest version of the desktop app from [GitHub Releases](https://git
 #### Windows (`winget`)
 
 ```bash
-winget install T3Tools.T3Code
+winget install T3Tools.DesignHarness
 ```
 
 #### macOS (Homebrew)

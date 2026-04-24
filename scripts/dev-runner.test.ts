@@ -13,12 +13,12 @@ import {
 
 it.layer(NodeServices.layer)("dev-runner", (it) => {
   describe("resolveOffset", () => {
-    it.effect("uses explicit T3CODE_PORT_OFFSET when provided", () =>
+    it.effect("uses explicit DH_PORT_OFFSET when provided", () =>
       Effect.sync(() => {
         const result = resolveOffset({ portOffset: 12, devInstance: undefined });
         assert.deepStrictEqual(result, {
           offset: 12,
-          source: "T3CODE_PORT_OFFSET=12",
+          source: "DH_PORT_OFFSET=12",
         });
       }),
     );
@@ -40,13 +40,13 @@ it.layer(NodeServices.layer)("dev-runner", (it) => {
           }),
         );
 
-        assert.ok(error.includes("Invalid T3CODE_PORT_OFFSET"));
+        assert.ok(error.includes("Invalid DH_PORT_OFFSET"));
       }),
     );
   });
 
   describe("createDevRunnerEnv", () => {
-    it.effect("defaults T3CODE_HOME to ~/.t3 when not provided", () =>
+    it.effect("defaults DH_HOME to ~/.dh when not provided", () =>
       Effect.gen(function* () {
         const path = yield* Path.Path;
         const env = yield* createDevRunnerEnv({
@@ -63,7 +63,7 @@ it.layer(NodeServices.layer)("dev-runner", (it) => {
           devUrl: undefined,
         });
 
-        assert.equal(env.T3CODE_HOME, path.resolve(NodeOS.homedir(), ".t3"));
+        assert.equal(env.DH_HOME, path.resolve(NodeOS.homedir(), ".dh"));
       }),
     );
 
@@ -84,14 +84,14 @@ it.layer(NodeServices.layer)("dev-runner", (it) => {
           devUrl: new URL("http://localhost:7331"),
         });
 
-        assert.equal(env.T3CODE_HOME, path.resolve("/tmp/custom-t3"));
-        assert.equal(env.T3CODE_PORT, "4222");
+        assert.equal(env.DH_HOME, path.resolve("/tmp/custom-t3"));
+        assert.equal(env.DH_PORT, "4222");
         assert.equal(env.VITE_HTTP_URL, "http://localhost:4222");
         assert.equal(env.VITE_WS_URL, "ws://localhost:4222");
-        assert.equal(env.T3CODE_NO_BROWSER, "1");
-        assert.equal(env.T3CODE_AUTO_BOOTSTRAP_PROJECT_FROM_CWD, "0");
-        assert.equal(env.T3CODE_LOG_WS_EVENTS, "1");
-        assert.equal(env.T3CODE_HOST, "0.0.0.0");
+        assert.equal(env.DH_NO_BROWSER, "1");
+        assert.equal(env.DH_AUTO_BOOTSTRAP_PROJECT_FROM_CWD, "0");
+        assert.equal(env.DH_LOG_WS_EVENTS, "1");
+        assert.equal(env.DH_HOST, "0.0.0.0");
         assert.equal(env.VITE_DEV_SERVER_URL, "http://localhost:7331/");
       }),
     );
@@ -101,7 +101,7 @@ it.layer(NodeServices.layer)("dev-runner", (it) => {
         const env = yield* createDevRunnerEnv({
           mode: "dev",
           baseEnv: {
-            T3CODE_LOG_WS_EVENTS: "keep-me-out",
+            DH_LOG_WS_EVENTS: "keep-me-out",
           },
           serverOffset: 0,
           webOffset: 0,
@@ -114,8 +114,8 @@ it.layer(NodeServices.layer)("dev-runner", (it) => {
           devUrl: undefined,
         });
 
-        assert.equal(env.T3CODE_MODE, "web");
-        assert.equal(env.T3CODE_LOG_WS_EVENTS, undefined);
+        assert.equal(env.DH_MODE, "web");
+        assert.equal(env.DH_LOG_WS_EVENTS, undefined);
       }),
     );
 
@@ -124,7 +124,7 @@ it.layer(NodeServices.layer)("dev-runner", (it) => {
         const env = yield* createDevRunnerEnv({
           mode: "dev",
           baseEnv: {
-            T3CODE_LOG_WS_EVENTS: "1",
+            DH_LOG_WS_EVENTS: "1",
           },
           serverOffset: 0,
           webOffset: 0,
@@ -137,7 +137,7 @@ it.layer(NodeServices.layer)("dev-runner", (it) => {
           devUrl: undefined,
         });
 
-        assert.equal(env.T3CODE_LOG_WS_EVENTS, "0");
+        assert.equal(env.DH_LOG_WS_EVENTS, "0");
       }),
     );
 
@@ -158,7 +158,7 @@ it.layer(NodeServices.layer)("dev-runner", (it) => {
           devUrl: undefined,
         });
 
-        assert.equal(env.T3CODE_HOME, path.resolve("/tmp/my-t3"));
+        assert.equal(env.DH_HOME, path.resolve("/tmp/my-t3"));
       }),
     );
 
@@ -178,7 +178,7 @@ it.layer(NodeServices.layer)("dev-runner", (it) => {
           devUrl: undefined,
         });
 
-        assert.equal(env.T3CODE_PORT, "13773");
+        assert.equal(env.DH_PORT, "13773");
         assert.equal(env.VITE_HTTP_URL, "http://localhost:13773");
         assert.equal(env.VITE_WS_URL, "ws://localhost:13773");
       }),

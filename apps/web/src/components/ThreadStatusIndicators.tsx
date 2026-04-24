@@ -1,5 +1,5 @@
-import { scopeProjectRef, scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime";
-import type { GitStatusResult } from "@t3tools/contracts";
+import { scopeProjectRef, scopedThreadKey, scopeThreadRef } from "@dh/client-runtime";
+import type { GitStatusResult } from "@dh/contracts";
 import { CloudIcon, GitPullRequestIcon } from "lucide-react";
 import { useMemo } from "react";
 import { usePrimaryEnvironmentId } from "../environments/primary";
