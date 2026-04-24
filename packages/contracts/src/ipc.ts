@@ -24,16 +24,6 @@ import type {
   ServerProviderUpdatedPayload,
   ServerUpsertKeybindingResult,
 } from "./server.ts";
-import type {
-  TerminalClearInput,
-  TerminalCloseInput,
-  TerminalEvent,
-  TerminalOpenInput,
-  TerminalResizeInput,
-  TerminalRestartInput,
-  TerminalSessionSnapshot,
-  TerminalWriteInput,
-} from "./terminal.ts";
 import type { ServerUpsertKeybindingInput } from "./server.ts";
 import type {
   ClientOrchestrationCommand,
@@ -220,21 +210,12 @@ export interface LocalApi {
  * APIs bound to a specific backend environment connection.
  *
  * These operations must always be routed with explicit environment context.
- * They represent remote stateful capabilities such as orchestration, terminal,
- * project, and git operations. In multi-environment mode, each environment gets
- * its own instance of this surface, and callers should resolve it by
- * `environmentId` rather than reaching through the local desktop bridge.
+ * They represent remote stateful capabilities such as orchestration, project,
+ * and git operations. In multi-environment mode, each environment gets its own
+ * instance of this surface, and callers should resolve it by `environmentId`
+ * rather than reaching through the local desktop bridge.
  */
 export interface EnvironmentApi {
-  terminal: {
-    open: (input: typeof TerminalOpenInput.Encoded) => Promise<TerminalSessionSnapshot>;
-    write: (input: typeof TerminalWriteInput.Encoded) => Promise<void>;
-    resize: (input: typeof TerminalResizeInput.Encoded) => Promise<void>;
-    clear: (input: typeof TerminalClearInput.Encoded) => Promise<void>;
-    restart: (input: typeof TerminalRestartInput.Encoded) => Promise<TerminalSessionSnapshot>;
-    close: (input: typeof TerminalCloseInput.Encoded) => Promise<void>;
-    onEvent: (callback: (event: TerminalEvent) => void) => () => void;
-  };
   projects: {
     searchEntries: (input: ProjectSearchEntriesInput) => Promise<ProjectSearchEntriesResult>;
     writeFile: (input: ProjectWriteFileInput) => Promise<ProjectWriteFileResult>;

@@ -14,7 +14,6 @@ import {
   OrchestrationThreadActivity,
   ProviderInteractionMode,
   RuntimeMode,
-  TerminalOpenInput,
 } from "@t3tools/contracts";
 import { scopedThreadKey, scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime";
 import { applyClaudePromptEffortPrefix, createModelSelection } from "@t3tools/shared/model";
@@ -98,7 +97,6 @@ import {
   formatTerminalContextLabel,
   type TerminalContextDraft,
 } from "../lib/terminalContext";
-import { selectThreadTerminalState, useTerminalStateStore } from "../terminalStateStore";
 import { ChatComposer, type ChatComposerHandle } from "./chat/ChatComposer";
 import { ExpandedImageDialog } from "./chat/ExpandedImageDialog";
 import { MessagesTimeline } from "./chat/MessagesTimeline";
@@ -282,12 +280,6 @@ type ChatViewProps =
       draftId: DraftId;
     };
 
-interface TerminalLaunchContext {
-  threadId: ThreadId;
-  cwd: string;
-  worktreePath: string | null;
-}
-
 function useLocalDispatchState(input: {
   activeThread: Thread | undefined;
   activeLatestTurn: Thread["latestTurn"] | null;
@@ -437,8 +429,6 @@ export default function ChatView(props: ChatViewProps) {
     useState<Record<string, number>>({});
   const [, setDesignSidebarOpen] = useState(false);
   const [designSidebarManuallyClosed, setDesignSidebarManuallyClosed] = useState(false);
-  const [, setTerminalFocusRequestId] = useState(0);
-  const [, setTerminalLaunchContext] = useState<TerminalLaunchContext | null>(null);
   const [attachmentPreviewHandoffByMessageId, setAttachmentPreviewHandoffByMessageId] = useState<
     Record<string, string[]>
   >({});
@@ -450,22 +440,6 @@ export default function ChatView(props: ChatViewProps) {
   const attachmentPreviewHandoffByMessageIdRef = useRef<Record<string, string[]>>({});
   const attachmentPreviewPromotionInFlightByMessageIdRef = useRef<Record<string, true>>({});
   const sendInFlightRef = useRef(false);
-  const terminalOpenByThreadRef = useRef<Record<string, boolean>>({});
-
-  const terminalState = useTerminalStateStore((state) =>
-    selectThreadTerminalState(state.terminalStateByThreadKey, routeThreadRef),
-  );
-  const storeSetTerminalOpen = useTerminalStateStore((s) => s.setTerminalOpen);
-  const storeSplitTerminal = useTerminalStateStore((s) => s.splitTerminal);
-  const storeNewTerminal = useTerminalStateStore((s) => s.newTerminal);
-  const storeSetActiveTerminal = useTerminalStateStore((s) => s.setActiveTerminal);
-  const storeCloseTerminal = useTerminalStateStore((s) => s.closeTerminal);
-  const storeServerTerminalLaunchContext = useTerminalStateStore(
-    (s) => s.terminalLaunchContextByThreadKey[scopedThreadKey(routeThreadRef)] ?? null,
-  );
-  const storeClearTerminalLaunchContext = useTerminalStateStore(
-    (s) => s.clearTerminalLaunchContext,
-  );
   const fallbackDraftProjectRef = draftThread
     ? scopeProjectRef(draftThread.environmentId, draftThread.projectId)
     : null;
@@ -957,16 +931,6 @@ export default function ChatView(props: ChatViewProps) {
       (activeThread.session !== null && activeThread.session.status !== "closed")),
   );
 
-  const activeTerminalGroup =
-    terminalState.terminalGroups.find(
-      (group) => group.id === terminalState.activeTerminalGroupId,
-    ) ??
-    terminalState.terminalGroups.find((group) =>
-      group.terminalIds.includes(terminalState.activeTerminalId),
-    ) ??
-    null;
-  const hasReachedSplitLimit =
-    (activeTerminalGroup?.terminalIds.length ?? 0) >= MAX_TERMINALS_PER_GROUP;
   const setThreadError = useCallback(
     (targetThreadId: ThreadId | null, error: string | null) => {
       if (!targetThreadId) return;
@@ -1002,67 +966,6 @@ export default function ChatView(props: ChatViewProps) {
       focusComposer();
     });
   }, [focusComposer]);
-  const setTerminalOpen = useCallback(
-    (open: boolean) => {
-      if (!activeThreadRef) return;
-      storeSetTerminalOpen(activeThreadRef, open);
-    },
-    [activeThreadRef, storeSetTerminalOpen],
-  );
-  const toggleTerminalVisibility = useCallback(() => {
-    if (!activeThreadRef) return;
-    setTerminalOpen(!terminalState.terminalOpen);
-  }, [activeThreadRef, setTerminalOpen, terminalState.terminalOpen]);
-  const splitTerminal = useCallback(() => {
-    if (!activeThreadRef || hasReachedSplitLimit) return;
-    const terminalId = `terminal-${randomUUID()}`;
-    storeSplitTerminal(activeThreadRef, terminalId);
-    setTerminalFocusRequestId((value) => value + 1);
-  }, [activeThreadRef, hasReachedSplitLimit, storeSplitTerminal]);
-  const createNewTerminal = useCallback(() => {
-    if (!activeThreadRef) return;
-    const terminalId = `terminal-${randomUUID()}`;
-    storeNewTerminal(activeThreadRef, terminalId);
-    setTerminalFocusRequestId((value) => value + 1);
-  }, [activeThreadRef, storeNewTerminal]);
-  const closeTerminal = useCallback(
-    (terminalId: string) => {
-      const api = readEnvironmentApi(environmentId);
-      if (!activeThreadId || !api) return;
-      const isFinalTerminal = terminalState.terminalIds.length <= 1;
-      const fallbackExitWrite = () =>
-        api.terminal
-          .write({ threadId: activeThreadId, terminalId, data: "exit\n" })
-          .catch(() => undefined);
-      if ("close" in api.terminal && typeof api.terminal.close === "function") {
-        void (async () => {
-          if (isFinalTerminal) {
-            await api.terminal
-              .clear({ threadId: activeThreadId, terminalId })
-              .catch(() => undefined);
-          }
-          await api.terminal.close({
-            threadId: activeThreadId,
-            terminalId,
-            deleteHistory: true,
-          });
-        })().catch(() => fallbackExitWrite());
-      } else {
-        void fallbackExitWrite();
-      }
-      if (activeThreadRef) {
-        storeCloseTerminal(activeThreadRef, terminalId);
-      }
-      setTerminalFocusRequestId((value) => value + 1);
-    },
-    [
-      activeThreadId,
-      activeThreadRef,
-      environmentId,
-      storeCloseTerminal,
-      terminalState.terminalIds.length,
-    ],
-  );
   const handleInteractionModeChange = useCallback(
     (mode: ProviderInteractionMode) => {
       if (mode === interactionMode) return;
@@ -1212,14 +1115,14 @@ export default function ChatView(props: ChatViewProps) {
   }, [activeThread?.id]);
 
   useEffect(() => {
-    if (!activeThread?.id || terminalState.terminalOpen) return;
+    if (!activeThread?.id) return;
     const frame = window.requestAnimationFrame(() => {
       focusComposer();
     });
     return () => {
       window.cancelAnimationFrame(frame);
     };
-  }, [activeThread?.id, focusComposer, terminalState.terminalOpen]);
+  }, [activeThread?.id, focusComposer]);
 
   useEffect(() => {
     if (!activeThread?.id) return;
@@ -1303,113 +1206,13 @@ export default function ChatView(props: ChatViewProps) {
   }, [canOverrideServerThreadEnvMode]);
 
   useEffect(() => {
-    if (!activeThreadId) {
-      setTerminalLaunchContext(null);
-      storeClearTerminalLaunchContext(routeThreadRef);
-      return;
-    }
-    setTerminalLaunchContext((current) => {
-      if (!current) return current;
-      if (current.threadId === activeThreadId) return current;
-      return null;
-    });
-  }, [activeThreadId, routeThreadRef, storeClearTerminalLaunchContext]);
-
-  useEffect(() => {
-    if (!activeThreadId || !activeProjectCwd) {
-      return;
-    }
-    setTerminalLaunchContext((current) => {
-      if (!current || current.threadId !== activeThreadId) {
-        return current;
-      }
-      const settledCwd = activeThreadWorktreePath ?? activeProjectCwd;
-      if (
-        settledCwd === current.cwd &&
-        (activeThreadWorktreePath ?? null) === current.worktreePath
-      ) {
-        if (activeThreadRef) {
-          storeClearTerminalLaunchContext(activeThreadRef);
-        }
-        return null;
-      }
-      return current;
-    });
-  }, [
-    activeProjectCwd,
-    activeThreadId,
-    activeThreadRef,
-    activeThreadWorktreePath,
-    storeClearTerminalLaunchContext,
-  ]);
-
-  useEffect(() => {
-    if (!activeThreadId || !activeProjectCwd || !storeServerTerminalLaunchContext) {
-      return;
-    }
-    const settledCwd = activeThreadWorktreePath ?? activeProjectCwd;
-    if (
-      settledCwd === storeServerTerminalLaunchContext.cwd &&
-      (activeThreadWorktreePath ?? null) === storeServerTerminalLaunchContext.worktreePath
-    ) {
-      if (activeThreadRef) {
-        storeClearTerminalLaunchContext(activeThreadRef);
-      }
-    }
-  }, [
-    activeProjectCwd,
-    activeThreadId,
-    activeThreadRef,
-    activeThreadWorktreePath,
-    storeClearTerminalLaunchContext,
-    storeServerTerminalLaunchContext,
-  ]);
-
-  useEffect(() => {
-    if (terminalState.terminalOpen) {
-      return;
-    }
-    if (activeThreadRef) {
-      storeClearTerminalLaunchContext(activeThreadRef);
-    }
-    setTerminalLaunchContext((current) => (current?.threadId === activeThreadId ? null : current));
-  }, [
-    activeThreadId,
-    activeThreadRef,
-    storeClearTerminalLaunchContext,
-    terminalState.terminalOpen,
-  ]);
-
-  useEffect(() => {
-    if (!activeThreadKey) return;
-    const previous = terminalOpenByThreadRef.current[activeThreadKey] ?? false;
-    const current = Boolean(terminalState.terminalOpen);
-
-    if (!previous && current) {
-      terminalOpenByThreadRef.current[activeThreadKey] = current;
-      setTerminalFocusRequestId((value) => value + 1);
-      return;
-    } else if (previous && !current) {
-      terminalOpenByThreadRef.current[activeThreadKey] = current;
-      const frame = window.requestAnimationFrame(() => {
-        focusComposer();
-      });
-      return () => {
-        window.cancelAnimationFrame(frame);
-      };
-    }
-
-    terminalOpenByThreadRef.current[activeThreadKey] = current;
-  }, [activeThreadKey, focusComposer, terminalState.terminalOpen]);
-
-  useEffect(() => {
     const handler = (event: globalThis.KeyboardEvent) => {
       if (!activeThreadId || useCommandPaletteStore.getState().open || event.defaultPrevented) {
         return;
       }
       const shortcutContext = {
         terminalFocus: isTerminalFocused(),
-        terminalOpen: Boolean(terminalState.terminalOpen),
+        terminalOpen: false,
         modelPickerOpen: composerRef.current?.isModelPickerOpen() ?? false,
       };
 
@@ -1417,41 +1220,6 @@ export default function ChatView(props: ChatViewProps) {
         context: shortcutContext,
       });
       if (!command) return;
-
-      if (command === "terminal.toggle") {
-        event.preventDefault();
-        event.stopPropagation();
-        toggleTerminalVisibility();
-        return;
-      }
-
-      if (command === "terminal.split") {
-        event.preventDefault();
-        event.stopPropagation();
-        if (!terminalState.terminalOpen) {
-          setTerminalOpen(true);
-        }
-        splitTerminal();
-        return;
-      }
-
-      if (command === "terminal.close") {
-        event.preventDefault();
-        event.stopPropagation();
-        if (!terminalState.terminalOpen) return;
-        closeTerminal(terminalState.activeTerminalId);
-        return;
-      }
-
-      if (command === "terminal.new") {
-        event.preventDefault();
-        event.stopPropagation();
-        if (!terminalState.terminalOpen) {
-          setTerminalOpen(true);
-        }
-        createNewTerminal();
-        return;
-      }
 
       if (command === "modelPicker.toggle") {
         event.preventDefault();
@@ -1462,18 +1230,7 @@ export default function ChatView(props: ChatViewProps) {
     };
     window.addEventListener("keydown", handler, true);
     return () => window.removeEventListener("keydown", handler, true);
-  }, [
-    activeProject,
-    terminalState.terminalOpen,
-    terminalState.activeTerminalId,
-    activeThreadId,
-    closeTerminal,
-    createNewTerminal,
-    setTerminalOpen,
-    splitTerminal,
-    keybindings,
-    toggleTerminalVisibility,
-  ]);
+  }, [activeProject, activeThreadId, keybindings]);
 
   const onRevertToTurnCount = useCallback(
     async (turnCount: number) => {
@@ -2417,7 +2174,7 @@ export default function ChatView(props: ChatViewProps) {
               resolvedTheme={resolvedTheme}
               settings={settings}
               keybindings={keybindings}
-              terminalOpen={Boolean(terminalState.terminalOpen)}
+              terminalOpen={false}
               gitCwd={gitCwd}
               promptRef={promptRef}
               composerImagesRef={composerImagesRef}

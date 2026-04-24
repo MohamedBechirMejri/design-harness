@@ -50,17 +50,6 @@ import {
   ProjectWriteFileResult,
 } from "./project.ts";
 import {
-  TerminalClearInput,
-  TerminalCloseInput,
-  TerminalError,
-  TerminalEvent,
-  TerminalOpenInput,
-  TerminalResizeInput,
-  TerminalRestartInput,
-  TerminalSessionSnapshot,
-  TerminalWriteInput,
-} from "./terminal.ts";
-import {
   ServerConfigStreamEvent,
   ServerConfig,
   ServerLifecycleStreamEvent,
@@ -93,14 +82,6 @@ export const WS_METHODS = {
   gitRefreshStatus: "git.refreshStatus",
   gitListBranches: "git.listBranches",
 
-  // Terminal methods
-  terminalOpen: "terminal.open",
-  terminalWrite: "terminal.write",
-  terminalResize: "terminal.resize",
-  terminalClear: "terminal.clear",
-  terminalRestart: "terminal.restart",
-  terminalClose: "terminal.close",
-
   // Server meta
   serverGetConfig: "server.getConfig",
   serverRefreshProviders: "server.refreshProviders",
@@ -110,7 +91,6 @@ export const WS_METHODS = {
 
   // Streaming subscriptions
   subscribeGitStatus: "subscribeGitStatus",
-  subscribeTerminalEvents: "subscribeTerminalEvents",
   subscribeServerConfig: "subscribeServerConfig",
   subscribeServerLifecycle: "subscribeServerLifecycle",
   subscribeAuthAccess: "subscribeAuthAccess",
@@ -205,38 +185,6 @@ export const WsGitListBranchesRpc = Rpc.make(WS_METHODS.gitListBranches, {
   error: GitCommandError,
 });
 
-export const WsTerminalOpenRpc = Rpc.make(WS_METHODS.terminalOpen, {
-  payload: TerminalOpenInput,
-  success: TerminalSessionSnapshot,
-  error: TerminalError,
-});
-
-export const WsTerminalWriteRpc = Rpc.make(WS_METHODS.terminalWrite, {
-  payload: TerminalWriteInput,
-  error: TerminalError,
-});
-
-export const WsTerminalResizeRpc = Rpc.make(WS_METHODS.terminalResize, {
-  payload: TerminalResizeInput,
-  error: TerminalError,
-});
-
-export const WsTerminalClearRpc = Rpc.make(WS_METHODS.terminalClear, {
-  payload: TerminalClearInput,
-  error: TerminalError,
-});
-
-export const WsTerminalRestartRpc = Rpc.make(WS_METHODS.terminalRestart, {
-  payload: TerminalRestartInput,
-  success: TerminalSessionSnapshot,
-  error: TerminalError,
-});
-
-export const WsTerminalCloseRpc = Rpc.make(WS_METHODS.terminalClose, {
-  payload: TerminalCloseInput,
-  error: TerminalError,
-});
-
 export const WsOrchestrationDispatchCommandRpc = Rpc.make(
   ORCHESTRATION_WS_METHODS.dispatchCommand,
   {
@@ -284,12 +232,6 @@ export const WsOrchestrationSubscribeThreadRpc = Rpc.make(
   },
 );
 
-export const WsSubscribeTerminalEventsRpc = Rpc.make(WS_METHODS.subscribeTerminalEvents, {
-  payload: Schema.Struct({}),
-  success: TerminalEvent,
-  stream: true,
-});
-
 export const WsSubscribeServerConfigRpc = Rpc.make(WS_METHODS.subscribeServerConfig, {
   payload: Schema.Struct({}),
   success: ServerConfigStreamEvent,
@@ -325,13 +267,6 @@ export const WsRpcGroup = RpcGroup.make(
   WsGitPullRpc,
   WsGitRefreshStatusRpc,
   WsGitListBranchesRpc,
-  WsTerminalOpenRpc,
-  WsTerminalWriteRpc,
-  WsTerminalResizeRpc,
-  WsTerminalClearRpc,
-  WsTerminalRestartRpc,
-  WsTerminalCloseRpc,
-  WsSubscribeTerminalEventsRpc,
   WsSubscribeServerConfigRpc,
   WsSubscribeServerLifecycleRpc,
   WsSubscribeAuthAccessRpc,

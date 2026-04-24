@@ -48,15 +48,6 @@ type RpcInputStreamMethod<TTag extends RpcTag> =
 export interface WsRpcClient {
   readonly dispose: () => Promise<void>;
   readonly reconnect: () => Promise<void>;
-  readonly terminal: {
-    readonly open: RpcUnaryMethod<typeof WS_METHODS.terminalOpen>;
-    readonly write: RpcUnaryMethod<typeof WS_METHODS.terminalWrite>;
-    readonly resize: RpcUnaryMethod<typeof WS_METHODS.terminalResize>;
-    readonly clear: RpcUnaryMethod<typeof WS_METHODS.terminalClear>;
-    readonly restart: RpcUnaryMethod<typeof WS_METHODS.terminalRestart>;
-    readonly close: RpcUnaryMethod<typeof WS_METHODS.terminalClose>;
-    readonly onEvent: RpcStreamMethod<typeof WS_METHODS.subscribeTerminalEvents>;
-  };
   readonly projects: {
     readonly searchEntries: RpcUnaryMethod<typeof WS_METHODS.projectsSearchEntries>;
     readonly writeFile: RpcUnaryMethod<typeof WS_METHODS.projectsWriteFile>;
@@ -111,20 +102,6 @@ export function createWsRpcClient(transport: WsTransport): WsRpcClient {
     reconnect: async () => {
       resetWsReconnectBackoff();
       await transport.reconnect();
-    },
-    terminal: {
-      open: (input) => transport.request((client) => client[WS_METHODS.terminalOpen](input)),
-      write: (input) => transport.request((client) => client[WS_METHODS.terminalWrite](input)),
-      resize: (input) => transport.request((client) => client[WS_METHODS.terminalResize](input)),
-      clear: (input) => transport.request((client) => client[WS_METHODS.terminalClear](input)),
-      restart: (input) => transport.request((client) => client[WS_METHODS.terminalRestart](input)),
-      close: (input) => transport.request((client) => client[WS_METHODS.terminalClose](input)),
-      onEvent: (listener, options) =>
-        transport.subscribe(
-          (client) => client[WS_METHODS.subscribeTerminalEvents]({}),
-          listener,
-          options,
-        ),
     },
     projects: {
       searchEntries: (input) =>

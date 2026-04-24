@@ -5,7 +5,6 @@ import {
   type OrchestrationShellSnapshot,
   type OrchestrationShellStreamEvent,
   type ServerConfig,
-  type TerminalEvent,
   ThreadId,
 } from "@t3tools/contracts";
 import { type QueryClient } from "@tanstack/react-query";
@@ -24,7 +23,6 @@ import {
   useComposerDraftStore,
 } from "~/composerDraftStore";
 import { ensureLocalApi } from "~/localApi";
-import { collectActiveTerminalThreadIds } from "~/lib/terminalStateCleanup";
 import { deriveOrchestrationBatchEffects } from "~/orchestrationEventEffects";
 import { projectQueryKeys } from "~/lib/projectReactQuery";
 import { providerQueryKeys } from "~/lib/providerReactQuery";
@@ -57,7 +55,6 @@ import {
   selectThreadByRef,
   selectThreadsAcrossEnvironments,
 } from "~/store";
-import { useTerminalStateStore } from "~/terminalStateStore";
 import { useUiStateStore } from "~/uiStateStore";
 import { WsTransport } from "../../rpc/wsTransport";
 import { createWsRpcClient, type WsRpcClient } from "../../rpc/wsRpcClient";
@@ -498,28 +495,6 @@ function syncThreadUiFromStore() {
 function reconcileSnapshotDerivedState() {
   syncProjectUiFromStore();
   syncThreadUiFromStore();
-
-  const threads = selectThreadsAcrossEnvironments(useStore.getState());
-  const activeThreadKeys = collectActiveTerminalThreadIds({
-    snapshotThreads: threads.map((thread) => ({
-      key: scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)),
-      deletedAt: null,
-      archivedAt: thread.archivedAt,
-    })),
-    draftThreadKeys: useComposerDraftStore.getState().listDraftThreadKeys(),
-  });
-  useTerminalStateStore.getState().removeOrphanedTerminalStates(activeThreadKeys);
-}
-
-export function shouldApplyTerminalEvent(input: {
-  serverThreadArchivedAt: string | null | undefined;
-  hasDraftThread: boolean;
-}): boolean {
-  if (input.serverThreadArchivedAt !== undefined) {
-    return input.serverThreadArchivedAt === null;
-  }
-
-  return input.hasDraftThread;
 }
 
 function applyRecoveredEventBatch(
@@ -585,9 +560,6 @@ function applyRecoveredEventBatch(
       draftStore.clearProjectDraftThreadId(scopeProjectRef(environmentId, event.payload.projectId));
     }
   }
-  for (const threadId of batchEffects.removeTerminalStateThreadIds) {
-    useTerminalStateStore.getState().removeTerminalState(scopeThreadRef(environmentId, threadId));
-  }
 
   reconcileThreadDetailSubscriptionEvictionForEnvironment(environmentId);
 }
@@ -621,9 +593,6 @@ function applyShellEvent(event: OrchestrationShellStreamEvent, environmentId: En
       if (!previousThread && threadRef) {
         markPromotedDraftThreadByRef(threadRef);
       }
-      if (previousThread?.archivedAt === null && event.thread.archivedAt !== null && threadRef) {
-        useTerminalStateStore.getState().removeTerminalState(threadRef);
-      }
       reconcileThreadDetailSubscriptionEvictionForThread(environmentId, event.thread.id);
       evictIdleThreadDetailSubscriptionsToCapacity();
       return;
@@ -632,7 +601,6 @@ function applyShellEvent(event: OrchestrationShellStreamEvent, environmentId: En
         disposeThreadDetailSubscriptionByKey(scopedThreadKey(threadRef));
         useComposerDraftStore.getState().clearDraftThread(threadRef);
         useUiStateStore.getState().clearThreadUi(scopedThreadKey(threadRef));
-        useTerminalStateStore.getState().removeTerminalState(threadRef);
       }
       syncThreadUiFromStore();
       return;
@@ -650,21 +618,6 @@ function createEnvironmentConnectionHandlers() {
       );
       reconcileThreadDetailSubscriptionEvictionForEnvironment(environmentId);
       reconcileSnapshotDerivedState();
-    },
-    applyTerminalEvent: (event: TerminalEvent, environmentId: EnvironmentId) => {
-      const threadRef = scopeThreadRef(environmentId, ThreadId.make(event.threadId));
-      const serverThread = selectThreadByRef(useStore.getState(), threadRef);
-      const hasDraftThread =
-        useComposerDraftStore.getState().getDraftThreadByRef(threadRef) !== null;
-      if (
-        !shouldApplyTerminalEvent({
-          serverThreadArchivedAt: serverThread?.archivedAt,
-          hasDraftThread,
-        })
-      ) {
-        return;
-      }
-      useTerminalStateStore.getState().applyTerminalEvent(threadRef, event);
     },
   };
 }

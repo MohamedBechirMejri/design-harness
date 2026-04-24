@@ -10,7 +10,6 @@ import { readEnvironmentApi } from "../environmentApi";
 import { newCommandId } from "../lib/utils";
 import { readLocalApi } from "../localApi";
 import { selectThreadByRef, selectThreadsForEnvironment, useStore } from "../store";
-import { useTerminalStateStore } from "../terminalStateStore";
 import { buildThreadRouteParams, resolveThreadRouteRef } from "../threadRoutes";
 import { useSettings } from "./useSettings";
 
@@ -21,7 +20,6 @@ export function useThreadActions() {
   const clearProjectDraftThreadById = useComposerDraftStore(
     (store) => store.clearProjectDraftThreadById,
   );
-  const clearTerminalState = useTerminalStateStore((state) => state.clearTerminalState);
   const router = useRouter();
   const { handleNewThread } = useNewThreadHandler();
   // Keep a ref so archiveThread can call handleNewThread without appearing in
@@ -115,12 +113,6 @@ export function useThreadActions() {
           .catch(() => undefined);
       }
 
-      try {
-        await api.terminal.close({ threadId: threadRef.threadId, deleteHistory: true });
-      } catch {
-        // Terminal may already be closed.
-      }
-
       const deletedThreadIds = deletedIds ?? new Set<ThreadId>();
       const currentRouteThreadRef = getCurrentRouteThreadRef();
       const shouldNavigateToFallback =
@@ -142,7 +134,6 @@ export function useThreadActions() {
         scopeProjectRef(threadRef.environmentId, thread.projectId),
         threadRef,
       );
-      clearTerminalState(threadRef);
 
       if (shouldNavigateToFallback) {
         if (fallbackThreadId) {
@@ -169,7 +160,6 @@ export function useThreadActions() {
     [
       clearComposerDraftForThread,
       clearProjectDraftThreadById,
-      clearTerminalState,
       getCurrentRouteThreadRef,
       router,
       resolveThreadTarget,

@@ -163,7 +163,6 @@ describe("createEnvironmentConnection", () => {
       client,
       applyShellEvent: vi.fn(),
       syncShellSnapshot,
-      applyTerminalEvent: vi.fn(),
     });
 
     await connection.ensureBootstrapped();
@@ -195,7 +194,6 @@ describe("createEnvironmentConnection", () => {
       client,
       applyShellEvent: vi.fn(),
       syncShellSnapshot: vi.fn(),
-      applyTerminalEvent: vi.fn(),
     });
 
     expect(() => emitWelcome(EnvironmentId.make("env-2"))).toThrow(
@@ -225,7 +223,6 @@ describe("createEnvironmentConnection", () => {
       client,
       applyShellEvent: vi.fn(),
       syncShellSnapshot,
-      applyTerminalEvent: vi.fn(),
     });
 
     await connection.ensureBootstrapped();

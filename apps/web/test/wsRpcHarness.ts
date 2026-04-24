@@ -26,7 +26,6 @@ const STREAM_METHODS = new Set<string>([
   ORCHESTRATION_WS_METHODS.subscribeShell,
   ORCHESTRATION_WS_METHODS.subscribeThread,
   WS_METHODS.subscribeGitStatus,
-  WS_METHODS.subscribeTerminalEvents,
   WS_METHODS.subscribeServerConfig,
   WS_METHODS.subscribeServerLifecycle,
 ]);

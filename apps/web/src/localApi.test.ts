@@ -8,7 +8,6 @@ import {
   type OrchestrationShellStreamItem,
   type ServerConfig,
   type ServerProvider,
-  type TerminalEvent,
   ThreadId,
 } from "@t3tools/contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -30,23 +29,11 @@ function registerListener<T>(listeners: Set<(event: T) => void>, listener: (even
   };
 }
 
-const terminalEventListeners = new Set<(event: TerminalEvent) => void>();
 const shellStreamListeners = new Set<(event: OrchestrationShellStreamItem) => void>();
 const gitStatusListeners = new Set<(event: GitStatusResult) => void>();
 
 const rpcClientMock = {
   dispose: vi.fn(),
-  terminal: {
-    open: vi.fn(),
-    write: vi.fn(),
-    resize: vi.fn(),
-    clear: vi.fn(),
-    restart: vi.fn(),
-    close: vi.fn(),
-    onEvent: vi.fn((listener: (event: TerminalEvent) => void) =>
-      registerListener(terminalEventListeners, listener),
-    ),
-  },
   projects: {
     searchEntries: vi.fn(),
     writeFile: vi.fn(),
@@ -277,7 +264,6 @@ beforeEach(() => {
   vi.resetModules();
   vi.clearAllMocks();
   showContextMenuFallbackMock.mockReset();
-  terminalEventListeners.clear();
   shellStreamListeners.clear();
   gitStatusListeners.clear();
   const testWindow = getWindowForTest();
@@ -303,47 +289,6 @@ describe("wsApi", () => {
     expect(rpcClientMock.server.getConfig).toHaveBeenCalledWith();
     expect(rpcClientMock.server.subscribeConfig).not.toHaveBeenCalled();
     expect(rpcClientMock.server.subscribeLifecycle).not.toHaveBeenCalled();
-  });
-
-  it("forwards terminal and shell stream events", async () => {
-    const { createEnvironmentApi } = await import("./environmentApi");
-
-    const api = createEnvironmentApi(rpcClientMock as never);
-    const onTerminalEvent = vi.fn();
-    const onShellEvent = vi.fn();
-
-    api.terminal.onEvent(onTerminalEvent);
-    api.orchestration.subscribeShell(onShellEvent);
-
-    const terminalEvent = {
-      threadId: "thread-1",
-      terminalId: "terminal-1",
-      createdAt: "2026-02-24T00:00:00.000Z",
-      type: "output",
-      data: "hello",
-    } as const;
-    emitEvent(terminalEventListeners, terminalEvent);
-
-    const shellEvent = {
-      kind: "project-upserted" as const,
-      sequence: 1,
-      project: {
-        id: ProjectId.make("project-1"),
-        title: "Project",
-        workspaceRoot: "/tmp/workspace",
-        defaultModelSelection: {
-          provider: "codex",
-          model: "gpt-5-codex",
-        },
-        scripts: [],
-        createdAt: "2026-02-24T00:00:00.000Z",
-        updatedAt: "2026-02-24T00:00:00.000Z",
-      },
-    } satisfies OrchestrationShellStreamItem;
-    emitEvent(shellStreamListeners, shellEvent);
-
-    expect(onTerminalEvent).toHaveBeenCalledWith(terminalEvent);
-    expect(onShellEvent).toHaveBeenCalledWith(shellEvent);
   });
 
   it("forwards git status stream events", async () => {
