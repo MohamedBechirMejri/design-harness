@@ -77,6 +77,7 @@ import { useTurnDiffSummaries } from "../hooks/useTurnDiffSummaries";
 import { useCommandPaletteStore } from "../commandPaletteStore";
 import { resolveShortcutCommand } from "../keybindings";
 import DesignPreviewSidebar from "./DesignPreviewSidebar";
+import { AppTopBar } from "./AppTopBar";
 import { ChevronDownIcon } from "lucide-react";
 import { cn, randomUUID } from "~/lib/utils";
 import { toastManager } from "./ui/toast";
@@ -2059,27 +2060,11 @@ export default function ChatView(props: ChatViewProps) {
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden bg-background">
-      {/* Minimal top bar — just the drag region + thread title */}
-      <header
-        className={cn(
-          "border-b border-border/60 px-3 sm:px-5",
-          isElectron
-            ? "drag-region flex h-[52px] items-center wco:h-[env(titlebar-area-height)] wco:pr-[calc(100vw-env(titlebar-area-width)-env(titlebar-area-x)+1em)]"
-            : "py-2 sm:py-3",
-        )}
-      >
-        <div className="flex min-w-0 flex-1 items-center gap-2">
-          <span className="inline-flex size-2 rounded-full bg-pink-400/80 shadow-[0_0_8px_1px_rgba(244,114,182,0.3)]" />
-          <span className="truncate text-sm font-medium text-foreground/90">
-            {activeThread.title || "New design"}
-          </span>
-          {activeProject?.name ? (
-            <span className="hidden truncate text-xs text-muted-foreground/50 sm:inline">
-              · {activeProject.name}
-            </span>
-          ) : null}
-        </div>
-      </header>
+      <AppTopBar
+        title={activeThread.title || "New design"}
+        subtitle={activeProject?.name ?? undefined}
+        statusTone={isWorking ? "brand" : "brand-alt"}
+      />
 
       {/* Error banner */}
       <ProviderStatusBanner status={activeProviderStatus} />

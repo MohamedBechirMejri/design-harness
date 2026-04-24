@@ -1,5 +1,6 @@
 import { ArrowUpRightIcon } from "lucide-react";
-import { SidebarInset, SidebarTrigger } from "./ui/sidebar";
+import { SidebarInset } from "./ui/sidebar";
+import { AppTopBar } from "./AppTopBar";
 
 const STARTER_PROMPTS = [
   "A bookmark manager, neo-brutalist",
@@ -12,17 +13,7 @@ export function NoActiveThreadState() {
   return (
     <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none bg-background text-foreground">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden bg-background">
-        <header className="flex items-center gap-3 border-b border-border/70 px-7 py-5">
-          <SidebarTrigger className="size-7 shrink-0 md:hidden" />
-          <div className="flex items-baseline gap-1.5">
-            <span aria-hidden className="font-display text-[22px] leading-none text-brand">
-              ◆
-            </span>
-            <span className="font-display text-[22px] leading-none tracking-tight text-foreground">
-              Design Harness
-            </span>
-          </div>
-        </header>
+        <AppTopBar />
 
         <div className="flex min-h-0 flex-1 items-center justify-center px-8 py-12">
           <div className="flex w-full max-w-3xl flex-col items-center gap-10 text-center">
