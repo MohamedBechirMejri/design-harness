@@ -1,7 +1,4 @@
 import {
-  type GitActionProgressEvent,
-  type GitRunStackedActionInput,
-  type GitRunStackedActionResult,
   type GitStatusResult,
   type GitStatusStreamEvent,
   type LocalApi,
@@ -48,22 +45,9 @@ type RpcInputStreamMethod<TTag extends RpcTag> =
       ) => () => void
     : never;
 
-interface GitRunStackedActionOptions {
-  readonly onProgress?: (event: GitActionProgressEvent) => void;
-}
-
 export interface WsRpcClient {
   readonly dispose: () => Promise<void>;
   readonly reconnect: () => Promise<void>;
-  readonly terminal: {
-    readonly open: RpcUnaryMethod<typeof WS_METHODS.terminalOpen>;
-    readonly write: RpcUnaryMethod<typeof WS_METHODS.terminalWrite>;
-    readonly resize: RpcUnaryMethod<typeof WS_METHODS.terminalResize>;
-    readonly clear: RpcUnaryMethod<typeof WS_METHODS.terminalClear>;
-    readonly restart: RpcUnaryMethod<typeof WS_METHODS.terminalRestart>;
-    readonly close: RpcUnaryMethod<typeof WS_METHODS.terminalClose>;
-    readonly onEvent: RpcStreamMethod<typeof WS_METHODS.subscribeTerminalEvents>;
-  };
   readonly projects: {
     readonly searchEntries: RpcUnaryMethod<typeof WS_METHODS.projectsSearchEntries>;
     readonly writeFile: RpcUnaryMethod<typeof WS_METHODS.projectsWriteFile>;
@@ -89,20 +73,7 @@ export interface WsRpcClient {
       listener: (status: GitStatusResult) => void,
       options?: StreamSubscriptionOptions,
     ) => () => void;
-    readonly runStackedAction: (
-      input: GitRunStackedActionInput,
-      options?: GitRunStackedActionOptions,
-    ) => Promise<GitRunStackedActionResult>;
     readonly listBranches: RpcUnaryMethod<typeof WS_METHODS.gitListBranches>;
-    readonly createWorktree: RpcUnaryMethod<typeof WS_METHODS.gitCreateWorktree>;
-    readonly removeWorktree: RpcUnaryMethod<typeof WS_METHODS.gitRemoveWorktree>;
-    readonly createBranch: RpcUnaryMethod<typeof WS_METHODS.gitCreateBranch>;
-    readonly checkout: RpcUnaryMethod<typeof WS_METHODS.gitCheckout>;
-    readonly init: RpcUnaryMethod<typeof WS_METHODS.gitInit>;
-    readonly resolvePullRequest: RpcUnaryMethod<typeof WS_METHODS.gitResolvePullRequest>;
-    readonly preparePullRequestThread: RpcUnaryMethod<
-      typeof WS_METHODS.gitPreparePullRequestThread
-    >;
   };
   readonly server: {
     readonly getConfig: RpcUnaryNoArgMethod<typeof WS_METHODS.serverGetConfig>;
@@ -131,20 +102,6 @@ export function createWsRpcClient(transport: WsTransport): WsRpcClient {
     reconnect: async () => {
       resetWsReconnectBackoff();
       await transport.reconnect();
-    },
-    terminal: {
-      open: (input) => transport.request((client) => client[WS_METHODS.terminalOpen](input)),
-      write: (input) => transport.request((client) => client[WS_METHODS.terminalWrite](input)),
-      resize: (input) => transport.request((client) => client[WS_METHODS.terminalResize](input)),
-      clear: (input) => transport.request((client) => client[WS_METHODS.terminalClear](input)),
-      restart: (input) => transport.request((client) => client[WS_METHODS.terminalRestart](input)),
-      close: (input) => transport.request((client) => client[WS_METHODS.terminalClose](input)),
-      onEvent: (listener, options) =>
-        transport.subscribe(
-          (client) => client[WS_METHODS.subscribeTerminalEvents]({}),
-          listener,
-          options,
-        ),
     },
     projects: {
       searchEntries: (input) =>
@@ -178,39 +135,8 @@ export function createWsRpcClient(transport: WsTransport): WsRpcClient {
           options,
         );
       },
-      runStackedAction: async (input, options) => {
-        let result: GitRunStackedActionResult | null = null;
-
-        await transport.requestStream(
-          (client) => client[WS_METHODS.gitRunStackedAction](input),
-          (event) => {
-            options?.onProgress?.(event);
-            if (event.kind === "action_finished") {
-              result = event.result;
-            }
-          },
-        );
-
-        if (result) {
-          return result;
-        }
-
-        throw new Error("Git action stream completed without a final result.");
-      },
       listBranches: (input) =>
         transport.request((client) => client[WS_METHODS.gitListBranches](input)),
-      createWorktree: (input) =>
-        transport.request((client) => client[WS_METHODS.gitCreateWorktree](input)),
-      removeWorktree: (input) =>
-        transport.request((client) => client[WS_METHODS.gitRemoveWorktree](input)),
-      createBranch: (input) =>
-        transport.request((client) => client[WS_METHODS.gitCreateBranch](input)),
-      checkout: (input) => transport.request((client) => client[WS_METHODS.gitCheckout](input)),
-      init: (input) => transport.request((client) => client[WS_METHODS.gitInit](input)),
-      resolvePullRequest: (input) =>
-        transport.request((client) => client[WS_METHODS.gitResolvePullRequest](input)),
-      preparePullRequestThread: (input) =>
-        transport.request((client) => client[WS_METHODS.gitPreparePullRequestThread](input)),
     },
     server: {
       getConfig: () => transport.request((client) => client[WS_METHODS.serverGetConfig]({})),

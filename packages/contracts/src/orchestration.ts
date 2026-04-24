@@ -527,7 +527,6 @@ const ThreadTurnStartBootstrapPrepareWorktree = Schema.Struct({
 const ThreadTurnStartBootstrap = Schema.Struct({
   createThread: Schema.optional(ThreadTurnStartBootstrapCreateThread),
   prepareWorktree: Schema.optional(ThreadTurnStartBootstrapPrepareWorktree),
-  runSetupScript: Schema.optional(Schema.Boolean),
 });
 
 export type ThreadTurnStartBootstrap = typeof ThreadTurnStartBootstrap.Type;
