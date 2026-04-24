@@ -11,7 +11,6 @@
     "T3CODE_NO_BROWSER",
     "T3CODE_HOME",
     "T3CODE_AUTH_TOKEN",
-    "T3CODE_DESKTOP_WS_URL",
     "T3CODE_TRACE_MIN_LEVEL",
     "T3CODE_TRACE_TIMING_ENABLED",
     "T3CODE_TRACE_FILE",
@@ -27,7 +26,7 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist/**", "dist-electron/**"]
+      "outputs": ["dist/**"]
     },
     "dev": {
       "dependsOn": ["@t3tools/contracts#build"],
