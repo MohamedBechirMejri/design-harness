@@ -22,7 +22,7 @@ If you want a log message to show up in the trace file, emit it inside an active
 
 ### Traces
 
-Completed spans are written as NDJSON records to `serverTracePath` (by default, `~/.t3/userdata/logs/server.trace.ndjson`).
+Completed spans are written as NDJSON records to `serverTracePath` (by default, `~/.dh/userdata/logs/server.trace.ndjson`).
 
 Important fields in each record:
 
@@ -65,7 +65,7 @@ You do not need any extra env vars. Just run the app normally and inspect `serve
 Examples:
 
 ```bash
-npx t3
+npx dh
 ```
 
 ```bash
@@ -97,7 +97,7 @@ Default Grafana login:
 ```bash
 export DH_OTLP_TRACES_URL=http://localhost:4318/v1/traces
 export DH_OTLP_METRICS_URL=http://localhost:4318/v1/metrics
-export DH_OTLP_SERVICE_NAME=t3-local
+export DH_OTLP_SERVICE_NAME=dh-local
 ```
 
 Optional:
@@ -112,7 +112,7 @@ export DH_TRACE_TIMING_ENABLED=true
 CLI:
 
 ```bash
-npx t3
+npx dh
 ```
 
 Monorepo web/server dev:
@@ -238,7 +238,7 @@ Recommended flow in Grafana:
 
 Good first searches:
 
-- service name such as `t3-local` or `t3-dev`
+- service name such as `dh-local` or `dh-dev`
 - span names like `sql.execute`, `git.runCommand`, `provider.sendTurn`
 - orchestration spans with attributes like `orchestration.command_type`
 
@@ -250,20 +250,20 @@ Traces are best for one request. Metrics are best for trends.
 
 Good metric families to watch:
 
-- `t3_rpc_request_duration`
-- `t3_orchestration_command_duration`
-- `t3_orchestration_command_ack_duration`
-- `t3_provider_turn_duration`
-- `t3_git_command_duration`
-- `t3_db_query_duration`
+- `dh_rpc_request_duration`
+- `dh_orchestration_command_duration`
+- `dh_orchestration_command_ack_duration`
+- `dh_provider_turn_duration`
+- `dh_git_command_duration`
+- `dh_db_query_duration`
 
 Counters tell you volume and failure rate:
 
-- `t3_rpc_requests_total`
-- `t3_orchestration_commands_total`
-- `t3_provider_turns_total`
-- `t3_git_commands_total`
-- `t3_db_queries_total`
+- `dh_rpc_requests_total`
+- `dh_orchestration_commands_total`
+- `dh_provider_turns_total`
+- `dh_git_commands_total`
+- `dh_db_queries_total`
 
 Use metrics when the question is:
 
@@ -279,7 +279,7 @@ Use traces when the question is:
 
 ### What The New Ack Metric Means
 
-`t3_orchestration_command_ack_duration` measures:
+`dh_orchestration_command_ack_duration` measures:
 
 - start: command dispatch enters the orchestration engine
 - end: the first committed domain event for that command is published by the server
@@ -310,7 +310,7 @@ If you need those later, add client-side instrumentation or a dedicated server f
 
 ### "Did this command take too long to acknowledge?"
 
-1. Check `t3_orchestration_command_ack_duration` by `commandType`.
+1. Check `dh_orchestration_command_ack_duration` by `commandType`.
 2. If it is high, inspect the corresponding orchestration trace.
 3. Look at child spans for projection, sqlite, provider, or git work.
 
