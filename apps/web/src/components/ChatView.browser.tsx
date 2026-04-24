@@ -2399,7 +2399,6 @@ describe("ChatView timeline estimator parity (full app)", () => {
                 bootstrap?: {
                   createThread?: { projectId?: string };
                   prepareWorktree?: { projectCwd?: string; baseBranch?: string; branch?: string };
-                  runSetupScript?: boolean;
                 };
               }
             | undefined;
@@ -2415,7 +2414,6 @@ describe("ChatView timeline estimator parity (full app)", () => {
                 baseBranch: "main",
                 branch: expect.stringMatching(/^t3code\/[0-9a-f]{8}$/),
               },
-              runSetupScript: true,
             },
           });
         },
@@ -2505,7 +2503,6 @@ describe("ChatView timeline estimator parity (full app)", () => {
                 bootstrap?: {
                   createThread?: { projectId?: string };
                   prepareWorktree?: { projectCwd?: string; baseBranch?: string; branch?: string };
-                  runSetupScript?: boolean;
                 };
               }
             | undefined;
@@ -2519,7 +2516,6 @@ describe("ChatView timeline estimator parity (full app)", () => {
                 baseBranch: "main",
                 branch: expect.stringMatching(/^t3code\/[0-9a-f]{8}$/),
               },
-              runSetupScript: true,
             },
           });
           expect(turnStartRequest?.bootstrap?.createThread).toBeUndefined();

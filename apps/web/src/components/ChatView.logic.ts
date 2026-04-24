@@ -1,6 +1,5 @@
 import {
   type EnvironmentId,
-  ProjectId,
   type ModelSelection,
   type ProviderKind,
   type ScopedThreadRef,
@@ -9,7 +8,6 @@ import {
 } from "@t3tools/contracts";
 import { type ChatMessage, type SessionPhase, type Thread, type ThreadSession } from "../types";
 import { type ComposerImageAttachment, type DraftThreadState } from "../composerDraftStore";
-import { Schema } from "effect";
 import { selectThreadByRef, useStore } from "../store";
 import {
   filterTerminalContextsWithText,
@@ -18,10 +16,7 @@ import {
 } from "../lib/terminalContext";
 import type { DraftThreadEnvMode } from "../composerDraftStore";
 
-export const LAST_INVOKED_SCRIPT_BY_PROJECT_KEY = "t3code:last-invoked-script-by-project";
 export const MAX_HIDDEN_MOUNTED_TERMINAL_THREADS = 10;
-
-export const LastInvokedScriptByProjectSchema = Schema.Record(ProjectId, Schema.String);
 
 export function buildLocalDraftThread(
   threadId: ThreadId,
