@@ -110,7 +110,7 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
     return (
       <button
         type="button"
-        className="flex size-8 cursor-pointer items-center justify-center rounded-full bg-rose-500/90 text-white transition-all duration-150 hover:bg-rose-500 hover:scale-105 sm:h-8 sm:w-8"
+        className="flex size-9 cursor-pointer items-center justify-center rounded-full bg-destructive text-destructive-foreground shadow-soft transition-[background-color,box-shadow] duration-150 hover:shadow-lifted sm:size-8"
         onClick={onInterrupt}
         aria-label="Stop generation"
       >
@@ -175,7 +175,7 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
   return (
     <button
       type="submit"
-      className="flex h-9 w-9 enabled:cursor-pointer items-center justify-center rounded-full bg-primary/90 text-primary-foreground transition-all duration-150 hover:bg-primary hover:scale-105 disabled:pointer-events-none disabled:opacity-30 disabled:hover:scale-100 sm:h-8 sm:w-8"
+      className="flex size-9 enabled:cursor-pointer items-center justify-center rounded-full bg-brand text-brand-foreground shadow-soft transition-[background-color,box-shadow] duration-150 enabled:hover:bg-brand/90 enabled:hover:shadow-lifted disabled:pointer-events-none disabled:bg-muted disabled:text-muted-foreground disabled:shadow-none sm:size-8"
       disabled={isSendBusy || isConnecting || !hasSendableContent}
       aria-label={
         isConnecting
