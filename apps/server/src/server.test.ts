@@ -2247,7 +2247,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-
   it.effect("routes websocket rpc git.pull errors", () =>
     Effect.gen(function* () {
       const gitError = new GitCommandError({

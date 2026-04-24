@@ -1459,7 +1459,6 @@ export default function ChatView(props: ChatViewProps) {
         composerRef.current?.toggleModelPicker();
         return;
       }
-
     };
     window.addEventListener("keydown", handler, true);
     return () => window.removeEventListener("keydown", handler, true);

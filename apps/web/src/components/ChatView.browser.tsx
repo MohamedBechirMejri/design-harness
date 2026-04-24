@@ -2210,7 +2210,6 @@ describe("ChatView timeline estimator parity (full app)", () => {
     }
   });
 
-
   it("shows the send state once bootstrap dispatch is in flight", async () => {
     useTerminalStateStore.setState({
       terminalStateByThreadKey: {},

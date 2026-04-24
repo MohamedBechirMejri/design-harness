@@ -9,11 +9,7 @@ import { useNewThreadHandler } from "./useHandleNewThread";
 import { readEnvironmentApi } from "../environmentApi";
 import { newCommandId } from "../lib/utils";
 import { readLocalApi } from "../localApi";
-import {
-  selectThreadByRef,
-  selectThreadsForEnvironment,
-  useStore,
-} from "../store";
+import { selectThreadByRef, selectThreadsForEnvironment, useStore } from "../store";
 import { useTerminalStateStore } from "../terminalStateStore";
 import { buildThreadRouteParams, resolveThreadRouteRef } from "../threadRoutes";
 import { useSettings } from "./useSettings";
@@ -169,7 +165,6 @@ export function useThreadActions() {
           await router.navigate({ to: "/", replace: true });
         }
       }
-
     },
     [
       clearComposerDraftForThread,
