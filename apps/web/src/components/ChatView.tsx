@@ -2075,7 +2075,14 @@ export default function ChatView(props: ChatViewProps) {
       {/* Main content area — chat on left, design preview always on right */}
       <div className="flex min-h-0 min-w-0 flex-1">
         {/* Chat column */}
-        <div className="flex min-h-0 min-w-0 flex-[0_0_40%] flex-col border-r border-border/60 md:flex-[0_0_38%] xl:flex-[0_0_35%]">
+        <div
+          className={cn(
+            "flex min-h-0 min-w-[360px] flex-col",
+            shouldShowDesignSidebar
+              ? "flex-[0_0_40%] border-r border-border md:flex-[0_0_38%] xl:flex-[0_0_34%]"
+              : "flex-1",
+          )}
+        >
           {/* Messages Wrapper */}
           <div className="relative flex min-h-0 flex-1 flex-col">
             {/* Messages — LegendList handles virtualization and scrolling internally */}

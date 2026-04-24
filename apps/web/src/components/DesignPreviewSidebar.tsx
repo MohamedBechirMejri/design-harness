@@ -1,15 +1,7 @@
 import { memo, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import {
-  ExternalLinkIcon,
-  FileIcon,
-  PaletteIcon,
-  PanelRightCloseIcon,
-  RefreshCwIcon,
-} from "lucide-react";
+import { ArrowUpRightIcon, FileIcon, PanelRightCloseIcon, RefreshCwIcon } from "lucide-react";
 import type { DesignPreviewEntry, EnvironmentId, ThreadId } from "@dh/contracts";
-import { Badge } from "./ui/badge";
-import { Button } from "./ui/button";
 import { ScrollArea } from "./ui/scroll-area";
 import { cn } from "~/lib/utils";
 import { readEnvironmentApi } from "~/environmentApi";
@@ -110,61 +102,29 @@ const DesignPreviewSidebar = memo(function DesignPreviewSidebar({
 
   const contents = readQuery.data?.contents ?? "";
   const selectedIsHtml = selectedPath ? isHtmlFile(selectedPath) : false;
+  const hasEntries = entries.length > 0;
+
+  const openInNewTab =
+    selectedIsHtml && contents
+      ? () => {
+          const blob = new Blob([contents], { type: "text/html" });
+          const url = URL.createObjectURL(blob);
+          window.open(url, "_blank", "noopener,noreferrer");
+          setTimeout(() => URL.revokeObjectURL(url), 60_000);
+        }
+      : null;
 
   return (
     <div
       className={cn(
-        "flex min-h-0 flex-col bg-card/50",
-        mode === "sidebar"
-          ? "h-full w-[560px] shrink-0 border-l border-border/70"
-          : mode === "pane"
-            ? "h-full w-full"
-            : "h-full w-full",
+        "flex min-h-0 flex-col bg-background",
+        mode === "sidebar" ? "h-full w-[560px] shrink-0 border-l border-border" : "h-full w-full",
       )}
     >
-      <div className="flex h-12 shrink-0 items-center justify-between border-b border-border/60 px-3">
-        <div className="flex items-center gap-2">
-          <Badge
-            variant="secondary"
-            className="rounded-md bg-pink-400/10 px-1.5 py-0 text-[10px] font-semibold tracking-wide text-pink-400 uppercase"
-          >
-            <PaletteIcon className="mr-1 inline size-3" />
-            Preview
-          </Badge>
-          <span className="text-[11px] text-muted-foreground/60">
-            {entries.length === 0
-              ? "No files yet"
-              : `${entries.length} file${entries.length === 1 ? "" : "s"}`}
-          </span>
-        </div>
-        <div className="flex items-center gap-1">
-          <Button
-            size="icon-xs"
-            variant="ghost"
-            onClick={() => listQuery.refetch()}
-            aria-label="Refresh design files"
-            className="text-muted-foreground/50 hover:text-foreground/70"
-          >
-            <RefreshCwIcon className={cn("size-3.5", listQuery.isFetching && "animate-spin")} />
-          </Button>
-          {mode !== "pane" && onClose ? (
-            <Button
-              size="icon-xs"
-              variant="ghost"
-              onClick={onClose}
-              aria-label="Close design sidebar"
-              className="text-muted-foreground/50 hover:text-foreground/70"
-            >
-              <PanelRightCloseIcon className="size-3.5" />
-            </Button>
-          ) : null}
-        </div>
-      </div>
-
-      <div className="flex min-h-0 flex-1 flex-col">
-        {/* Horizontal tab strip for design files */}
-        {entries.length > 0 ? (
-          <div className="flex shrink-0 items-center gap-1 overflow-x-auto border-b border-border/60 px-2 py-1.5">
+      {/* Canvas header — file tabs as the primary nav, compact actions on the right */}
+      <div className="flex h-11 shrink-0 items-center gap-2 border-b border-border bg-surface/60 pl-2 pr-3">
+        {hasEntries ? (
+          <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
             {entries.map((entry) => {
               const isActive = selectedPath === entry.relativePath;
               const isHtml = isHtmlFile(entry.relativePath);
@@ -175,124 +135,164 @@ const DesignPreviewSidebar = memo(function DesignPreviewSidebar({
                   onClick={() => setSelectedPath(entry.relativePath)}
                   title={entry.relativePath}
                   className={cn(
-                    "inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-[11px] transition-colors",
+                    "inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md border px-2.5 text-[13px] transition-colors",
                     isActive
-                      ? "bg-pink-400/10 text-foreground"
-                      : "text-muted-foreground/70 hover:bg-muted/30 hover:text-foreground/90",
+                      ? "border-border-strong bg-background text-foreground shadow-soft"
+                      : "border-transparent text-muted-foreground hover:bg-accent/60 hover:text-foreground",
                   )}
                 >
                   <FileIcon
                     className={cn(
-                      "size-3 shrink-0",
-                      isActive ? "text-pink-400" : "text-muted-foreground/50",
+                      "size-3.5 shrink-0",
+                      isActive ? "text-brand" : "text-muted-foreground/70",
                     )}
                   />
-                  <span className="max-w-[140px] truncate">{entry.name}</span>
+                  <span className="max-w-[180px] truncate font-mono text-[12px]">{entry.name}</span>
                   {!isHtml ? (
-                    <span className="text-[9px] text-muted-foreground/40">txt</span>
+                    <span className="font-mono text-[10px] uppercase tracking-wide text-muted-foreground/60">
+                      txt
+                    </span>
                   ) : null}
                 </button>
               );
             })}
-            {selectedIsHtml && contents ? (
-              <div className="ml-auto shrink-0">
-                <Button
-                  size="icon-xs"
-                  variant="ghost"
-                  aria-label="Open preview in new tab"
-                  className="text-muted-foreground/50 hover:text-foreground/70"
-                  onClick={() => {
-                    const blob = new Blob([contents], { type: "text/html" });
-                    const url = URL.createObjectURL(blob);
-                    window.open(url, "_blank", "noopener,noreferrer");
-                    setTimeout(() => URL.revokeObjectURL(url), 60_000);
-                  }}
-                >
-                  <ExternalLinkIcon className="size-3.5" />
-                </Button>
-              </div>
-            ) : null}
           </div>
-        ) : null}
+        ) : (
+          <div className="flex min-w-0 flex-1 items-center gap-2 pl-1 text-[13px]">
+            <span className="font-display text-[17px] italic text-foreground">Canvas</span>
+            <span className="text-muted-foreground/70">— waiting for a design</span>
+          </div>
+        )}
+        <div className="flex shrink-0 items-center gap-0.5">
+          {openInNewTab ? (
+            <button
+              type="button"
+              onClick={openInNewTab}
+              aria-label="Open in new tab"
+              className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent/70 hover:text-foreground"
+            >
+              <ArrowUpRightIcon className="size-4" />
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => listQuery.refetch()}
+            aria-label="Refresh"
+            className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent/70 hover:text-foreground"
+          >
+            <RefreshCwIcon className={cn("size-4", listQuery.isFetching && "animate-spin")} />
+          </button>
+          {mode !== "pane" && onClose ? (
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close canvas"
+              className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent/70 hover:text-foreground"
+            >
+              <PanelRightCloseIcon className="size-4" />
+            </button>
+          ) : null}
+        </div>
+      </div>
 
-        {/* Empty / error states replace the preview area entirely when no files */}
-        {entries.length === 0 ? (
-          <div className="flex min-h-0 flex-1 items-center justify-center p-8">
-            {listQuery.isError ? (
-              <div className="max-w-sm text-center text-xs text-rose-400">
-                <div className="font-medium">Failed to load design files.</div>
-                <div className="mt-1 break-words text-[10px] text-rose-400/80">
-                  {listQuery.error instanceof Error
-                    ? listQuery.error.message
-                    : String(listQuery.error ?? "")}
-                </div>
-                {resolvedAbsolutePath ? (
-                  <div className="mt-3 break-all text-[10px] text-muted-foreground/50">
-                    {resolvedAbsolutePath}
-                  </div>
-                ) : null}
-              </div>
-            ) : listQuery.isPending ? (
-              <div className="text-xs text-muted-foreground/60">Loading…</div>
-            ) : (
-              <div className="flex max-w-sm flex-col items-center gap-3 text-center">
-                <div className="flex size-14 items-center justify-center rounded-2xl border border-pink-400/20 bg-pink-400/5">
-                  <PaletteIcon className="size-6 text-pink-400/70" aria-hidden />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <div className="text-sm font-medium text-foreground/80">
-                    Your design will appear here
-                  </div>
-                  <div className="text-xs text-muted-foreground/60">
-                    Describe what you want in the chat. The preview updates live as the model writes
-                    HTML.
-                  </div>
-                </div>
-                {resolvedAbsolutePath ? (
-                  <div className="mt-1 break-all text-[10px] text-muted-foreground/30">
-                    {resolvedAbsolutePath}
-                  </div>
-                ) : null}
-              </div>
-            )}
+      {/* Canvas body */}
+      <div className="flex min-h-0 flex-1 flex-col p-4">
+        {!hasEntries ? (
+          <CanvasEmptyState
+            isError={listQuery.isError}
+            isPending={listQuery.isPending}
+            error={listQuery.error}
+            absolutePath={resolvedAbsolutePath}
+          />
+        ) : !selectedPath ? (
+          <div className="flex h-full items-center justify-center rounded-2xl border border-border bg-surface text-[13px] text-muted-foreground">
+            Select a file to preview.
           </div>
-        ) : null}
-
-        {/* Preview pane — only when there are files */}
-        {entries.length > 0 ? (
-          <div className="flex min-h-0 flex-1 flex-col bg-background">
-            {!selectedPath ? (
-              <div className="flex h-full items-center justify-center px-6 text-xs text-muted-foreground/50">
-                Select a file to preview.
-              </div>
-            ) : readQuery.isPending ? (
-              <div className="flex h-full items-center justify-center text-xs text-muted-foreground/50">
-                Loading…
-              </div>
-            ) : readQuery.isError ? (
-              <div className="flex h-full items-center justify-center text-xs text-rose-400">
-                Failed to load file.
-              </div>
-            ) : selectedIsHtml ? (
-              <iframe
-                key={`${selectedPath}:${selectedEntry?.modifiedAtMs ?? 0}`}
-                title={`Preview of ${selectedPath}`}
-                sandbox="allow-scripts allow-forms allow-popups"
-                srcDoc={contents}
-                className="h-full w-full border-0 bg-white"
-              />
-            ) : (
-              <ScrollArea className="h-full">
-                <pre className="whitespace-pre-wrap break-words p-3 text-[11px] text-foreground/90">
-                  {contents}
-                </pre>
-              </ScrollArea>
-            )}
+        ) : readQuery.isPending ? (
+          <div className="flex h-full items-center justify-center rounded-2xl border border-border bg-surface text-[13px] text-muted-foreground">
+            Loading…
           </div>
-        ) : null}
+        ) : readQuery.isError ? (
+          <div className="flex h-full items-center justify-center rounded-2xl border border-destructive/40 bg-destructive/5 px-6 text-center text-[13px] text-destructive">
+            Failed to load file.
+          </div>
+        ) : selectedIsHtml ? (
+          <div className="flex min-h-0 flex-1 overflow-hidden rounded-2xl border border-border-strong/60 bg-white shadow-soft">
+            <iframe
+              key={`${selectedPath}:${selectedEntry?.modifiedAtMs ?? 0}`}
+              title={`Preview of ${selectedPath}`}
+              sandbox="allow-scripts allow-forms allow-popups"
+              srcDoc={contents}
+              className="h-full w-full border-0 bg-white"
+            />
+          </div>
+        ) : (
+          <ScrollArea className="h-full rounded-2xl border border-border bg-surface">
+            <pre className="whitespace-pre-wrap break-words p-5 font-mono text-[13px] leading-relaxed text-foreground/90">
+              {contents}
+            </pre>
+          </ScrollArea>
+        )}
       </div>
     </div>
   );
 });
+
+interface CanvasEmptyStateProps {
+  isError: boolean;
+  isPending: boolean;
+  error: unknown;
+  absolutePath: string | undefined;
+}
+
+function CanvasEmptyState({ isError, isPending, error, absolutePath }: CanvasEmptyStateProps) {
+  if (isError) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-3 rounded-2xl border border-destructive/30 bg-destructive/5 px-8 text-center">
+        <div className="font-display text-[22px] italic leading-tight text-destructive">
+          Failed to load design files.
+        </div>
+        <div className="max-w-md text-[13px] text-destructive/80">
+          {error instanceof Error ? error.message : String(error ?? "Unknown error.")}
+        </div>
+        {absolutePath ? (
+          <div className="mt-2 max-w-md break-all font-mono text-[11px] text-muted-foreground">
+            {absolutePath}
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+  if (isPending) {
+    return (
+      <div className="flex h-full items-center justify-center rounded-2xl border border-border bg-surface text-[13px] text-muted-foreground">
+        Loading…
+      </div>
+    );
+  }
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-5 rounded-2xl border border-dashed border-border-strong/60 bg-surface/60 px-8 text-center">
+      <div
+        aria-hidden
+        className="flex size-16 items-center justify-center rounded-2xl border border-border-strong/60 bg-background"
+      >
+        <span className="font-display text-[28px] italic text-brand/80">◆</span>
+      </div>
+      <div className="flex max-w-md flex-col gap-1.5">
+        <div className="font-display text-[26px] italic leading-tight text-foreground">
+          Your design will appear here.
+        </div>
+        <div className="text-[14px] leading-relaxed text-muted-foreground">
+          Describe what you want in the chat. The canvas refreshes as the model writes HTML.
+        </div>
+      </div>
+      {absolutePath ? (
+        <div className="mt-1 max-w-md break-all font-mono text-[11px] text-muted-foreground/70">
+          {absolutePath}
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 export default DesignPreviewSidebar;
