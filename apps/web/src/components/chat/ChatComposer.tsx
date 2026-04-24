@@ -565,20 +565,6 @@ export const ChatComposer = memo(
             label: "/model",
             description: "Switch response model for this thread",
           },
-          {
-            id: "slash:plan",
-            type: "slash-command",
-            command: "plan",
-            label: "/plan",
-            description: "Switch this thread into plan mode",
-          },
-          {
-            id: "slash:default",
-            type: "slash-command",
-            command: "default",
-            label: "/default",
-            description: "Switch this thread back to normal build mode",
-          },
         ] satisfies ReadonlyArray<Extract<ComposerCommandItem, { type: "slash-command" }>>;
         const providerSlashCommandItems = (selectedProviderStatus?.slashCommands ?? []).map(
           (command) => ({
@@ -1196,7 +1182,7 @@ export const ChatComposer = memo(
             }
             return;
           }
-          void handleInteractionModeChange(item.command === "plan" ? "plan" : "default");
+          void handleInteractionModeChange("default");
           const applied = applyPromptReplacement(trigger.rangeStart, trigger.rangeEnd, "", {
             expectedText: snapshot.value.slice(trigger.rangeStart, trigger.rangeEnd),
           });
