@@ -2848,16 +2848,22 @@ const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         "full-access": "bypassPermissions",
       };
       const isDesignMode = input.interactionMode === "design";
-      // Design mode: only let Claude write/edit files inside the sandboxed
-      // cwd. Block Bash, search/grep tools, web fetch, sub-agent Task tool —
-      // anything that could read or explore the surrounding repo.
-      const designModeAllowedTools = ["Write", "Edit", "MultiEdit", "Read"] as const;
+      // Design mode: file IO is restricted to the sandboxed cwd, plus the
+      // web tools so the model can pull in inspiration / icon sets / CDN
+      // assets. Everything that lets it explore the surrounding repo
+      // (Bash, Grep, Glob, sub-agent Task) stays blocked.
+      const designModeAllowedTools = [
+        "Write",
+        "Edit",
+        "MultiEdit",
+        "Read",
+        "WebFetch",
+        "WebSearch",
+      ] as const;
       const designModeDisallowedTools = [
         "Bash",
         "Glob",
         "Grep",
-        "WebFetch",
-        "WebSearch",
         "Task",
         "NotebookEdit",
         "NotebookRead",
