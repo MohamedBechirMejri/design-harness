@@ -813,13 +813,7 @@ function OpenCommandPaletteDialog() {
   const submitActionLabel = willCreateProjectPath ? "Create & Add" : "Add";
   const addShortcutLabel = hasHighlightedBrowseItem ? `${submitModifierLabel} Enter` : "Enter";
   const fileManagerName = getLocalFileManagerName(navigator.platform);
-  const canOpenProjectFromFileManager =
-    isBrowsing &&
-    browseEnvironmentId !== null &&
-    primaryEnvironmentId !== null &&
-    browseEnvironmentId === primaryEnvironmentId &&
-    typeof window !== "undefined" &&
-    window.desktopBridge !== undefined;
+  const canOpenProjectFromFileManager = false;
   const fileManagerInitialPath = useMemo(() => {
     if (!canOpenProjectFromFileManager) {
       return undefined;

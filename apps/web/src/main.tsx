@@ -3,7 +3,6 @@ import ReactDOM from "react-dom/client";
 import { RouterProvider } from "@tanstack/react-router";
 import { createBrowserHistory } from "@tanstack/react-router";
 
-import "@xterm/xterm/css/xterm.css";
 import "./index.css";
 
 import { getRouter } from "./router";
