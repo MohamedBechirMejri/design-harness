@@ -295,10 +295,14 @@ function runtimeModeToTurnSandboxPolicy(
 function resolveCodexDeveloperInstructions(input: {
   readonly interactionMode: ProviderInteractionMode;
   readonly threadId: string;
+  readonly cwd: string | undefined;
 }): string {
   switch (input.interactionMode) {
     case "design":
-      return renderDesignModeInstructions({ threadId: input.threadId });
+      return renderDesignModeInstructions({
+        threadId: input.threadId,
+        ...(input.cwd ? { cwd: input.cwd } : {}),
+      });
     case "default":
       return CODEX_DEFAULT_MODE_DEVELOPER_INSTRUCTIONS;
   }
@@ -316,6 +320,7 @@ function toCodexModeKind(
 function buildCodexCollaborationMode(input: {
   readonly interactionMode?: ProviderInteractionMode;
   readonly threadId: string;
+  readonly cwd?: string;
   readonly model?: string;
   readonly effort?: EffectCodexSchema.V2TurnStartParams__ReasoningEffort;
 }): EffectCodexSchema.V2TurnStartParams__CollaborationMode | undefined {
@@ -331,6 +336,7 @@ function buildCodexCollaborationMode(input: {
       developer_instructions: resolveCodexDeveloperInstructions({
         interactionMode: input.interactionMode,
         threadId: input.threadId,
+        cwd: input.cwd,
       }),
     },
   };
@@ -338,6 +344,7 @@ function buildCodexCollaborationMode(input: {
 
 export function buildTurnStartParams(input: {
   readonly threadId: string;
+  readonly cwd?: string;
   readonly runtimeMode: RuntimeMode;
   readonly prompt?: string;
   readonly attachments?: ReadonlyArray<{ readonly type: "image"; readonly url: string }>;
@@ -363,6 +370,7 @@ export function buildTurnStartParams(input: {
   const config = runtimeModeToThreadConfig(input.runtimeMode);
   const collaborationMode = buildCodexCollaborationMode({
     threadId: input.threadId,
+    ...(input.cwd ? { cwd: input.cwd } : {}),
     ...(input.interactionMode ? { interactionMode: input.interactionMode } : {}),
     ...(input.model ? { model: input.model } : {}),
     ...(input.effort ? { effort: input.effort } : {}),
@@ -1219,6 +1227,7 @@ export const makeCodexSessionRuntime = (
           );
           const params = yield* buildTurnStartParams({
             threadId: providerThreadId,
+            cwd: options.cwd,
             runtimeMode: options.runtimeMode,
             ...(input.input ? { prompt: input.input } : {}),
             ...(input.attachments ? { attachments: input.attachments } : {}),

@@ -554,7 +554,7 @@ const CLAUDE_SETTING_SOURCES = [
   "local",
 ] as const satisfies ReadonlyArray<SettingSource>;
 
-function buildPromptText(input: ProviderSendTurnInput): string {
+function buildPromptText(input: ProviderSendTurnInput, sessionCwd: string | undefined): string {
   const rawEffort =
     input.modelSelection?.provider === "claudeAgent" ? input.modelSelection.options?.effort : null;
   const claudeModel =
@@ -568,7 +568,10 @@ function buildPromptText(input: ProviderSendTurnInput): string {
     trimmedEffort && caps.promptInjectedEffortLevels.includes(trimmedEffort) ? trimmedEffort : null;
   const withEffort = applyClaudePromptEffortPrefix(input.input?.trim() ?? "", promptEffort);
   if (input.interactionMode === "design") {
-    const designInstructions = renderDesignModeInstructions({ threadId: input.threadId });
+    const designInstructions = renderDesignModeInstructions({
+      threadId: input.threadId,
+      ...(sessionCwd ? { cwd: sessionCwd } : {}),
+    });
     return `${designInstructions}\n\n---\n\n${withEffort}`;
   }
   return withEffort;
@@ -607,9 +610,10 @@ const buildUserMessageEffect = Effect.fn("buildUserMessageEffect")(function* (
   dependencies: {
     readonly fileSystem: FileSystem.FileSystem;
     readonly attachmentsDir: string;
+    readonly sessionCwd: string | undefined;
   },
 ) {
-  const text = buildPromptText(input);
+  const text = buildPromptText(input, dependencies.sessionCwd);
   const sdkContent: Array<Record<string, unknown>> = [];
 
   if (text.length > 0) {
@@ -3073,6 +3077,7 @@ const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
     const message = yield* buildUserMessageEffect(input, {
       fileSystem,
       attachmentsDir: serverConfig.attachmentsDir,
+      sessionCwd: context.session.cwd,
     });
 
     yield* Queue.offer(context.promptQueue, {

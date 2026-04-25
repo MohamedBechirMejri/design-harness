@@ -8,16 +8,29 @@ import {
   type OrchestrationSession,
   ThreadId,
   type ProviderSession,
+  type ProviderInteractionMode,
   type RuntimeMode,
   type TurnId,
 } from "@dh/contracts";
-import { Cache, Cause, Duration, Effect, Equal, Layer, Option, Schema, Stream } from "effect";
+import {
+  Cache,
+  Cause,
+  Duration,
+  Effect,
+  Equal,
+  FileSystem,
+  Layer,
+  Option,
+  Schema,
+  Stream,
+} from "effect";
 import { makeDrainableWorker } from "@dh/shared/DrainableWorker";
 
 import { resolveThreadWorkspaceCwd } from "../../checkpointing/Utils.ts";
 import { increment, orchestrationEventsProcessedTotal } from "../../observability/Metrics.ts";
 import { ProviderAdapterRequestError } from "../../provider/Errors.ts";
 import type { ProviderServiceError } from "../../provider/Errors.ts";
+import { DESIGN_MODE_OUTPUT_SUBDIR } from "../../provider/DesignModeInstructions.ts";
 import { ProviderService } from "../../provider/Services/ProviderService.ts";
 import { OrchestrationEngineService } from "../Services/OrchestrationEngine.ts";
 import {
@@ -247,10 +260,33 @@ const make = Effect.gen(function* () {
     }
     const preferredProvider: ProviderKind = threadProvider;
     const desiredModelSelection = requestedModelSelection ?? thread.modelSelection;
-    const effectiveCwd = resolveThreadWorkspaceCwd({
+    const projectCwd = resolveThreadWorkspaceCwd({
       thread,
       projects: readModel.projects,
     });
+
+    // Design mode is intentionally sandboxed: the model gets a dedicated
+    // working directory under `.dh/design/<threadId>/` and a workspace-write
+    // sandbox so it can't read or modify the surrounding repo even if it
+    // tries. Default mode keeps the project's natural cwd + runtime mode.
+    const isDesignMode = thread.interactionMode === "design";
+    const sandboxedDesignCwd =
+      isDesignMode && projectCwd
+        ? `${projectCwd.replace(/\/+$/, "")}/${DESIGN_MODE_OUTPUT_SUBDIR}/${threadId}`
+        : null;
+    const effectiveCwd = sandboxedDesignCwd ?? projectCwd;
+    const effectiveRuntimeMode: RuntimeMode = isDesignMode
+      ? "auto-accept-edits"
+      : desiredRuntimeMode;
+
+    const ensureDesignDir = sandboxedDesignCwd
+      ? Effect.gen(function* () {
+          const fs = yield* FileSystem.FileSystem;
+          yield* fs
+            .makeDirectory(sandboxedDesignCwd, { recursive: true })
+            .pipe(Effect.ignoreCause({ log: true }));
+        })
+      : Effect.void;
 
     const resolveActiveSession = (threadId: ThreadId) =>
       providerService
@@ -261,14 +297,18 @@ const make = Effect.gen(function* () {
       readonly resumeCursor?: unknown;
       readonly provider?: ProviderKind;
     }) =>
-      providerService.startSession(threadId, {
-        threadId,
-        ...(preferredProvider ? { provider: preferredProvider } : {}),
-        ...(effectiveCwd ? { cwd: effectiveCwd } : {}),
-        modelSelection: desiredModelSelection,
-        ...(input?.resumeCursor !== undefined ? { resumeCursor: input.resumeCursor } : {}),
-        runtimeMode: desiredRuntimeMode,
-      });
+      ensureDesignDir.pipe(
+        Effect.flatMap(() =>
+          providerService.startSession(threadId, {
+            threadId,
+            ...(preferredProvider ? { provider: preferredProvider } : {}),
+            ...(effectiveCwd ? { cwd: effectiveCwd } : {}),
+            modelSelection: desiredModelSelection,
+            ...(input?.resumeCursor !== undefined ? { resumeCursor: input.resumeCursor } : {}),
+            runtimeMode: effectiveRuntimeMode,
+          }),
+        ),
+      );
 
     const bindSessionToThread = (session: ProviderSession) =>
       setThreadSession({
