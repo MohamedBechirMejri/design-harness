@@ -1,8 +1,7 @@
 import { memo } from "react";
-import { ChevronDownIcon, ChevronLeftIcon } from "lucide-react";
+import { ChevronLeftIcon } from "lucide-react";
 import { cn } from "~/lib/utils";
 import { Button } from "../ui/button";
-import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
 
 interface PendingActionState {
   questionIndex: number;
@@ -16,15 +15,12 @@ interface ComposerPrimaryActionsProps {
   compact: boolean;
   pendingAction: PendingActionState | null;
   isRunning: boolean;
-  showPlanFollowUpPrompt: boolean;
-  promptHasText: boolean;
   isSendBusy: boolean;
   isConnecting: boolean;
   isPreparingWorktree: boolean;
   hasSendableContent: boolean;
   onPreviousPendingQuestion: () => void;
   onInterrupt: () => void;
-  onImplementPlanInNewThread: () => void;
 }
 
 export const formatPendingPrimaryActionLabel = (input: {
@@ -49,15 +45,12 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
   compact,
   pendingAction,
   isRunning,
-  showPlanFollowUpPrompt,
-  promptHasText,
   isSendBusy,
   isConnecting,
   isPreparingWorktree,
   hasSendableContent,
   onPreviousPendingQuestion,
   onInterrupt,
-  onImplementPlanInNewThread,
 }: ComposerPrimaryActionsProps) {
   if (pendingAction) {
     return (
@@ -118,57 +111,6 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
           <rect x="2" y="2" width="8" height="8" rx="1.5" />
         </svg>
       </button>
-    );
-  }
-
-  if (showPlanFollowUpPrompt) {
-    if (promptHasText) {
-      return (
-        <Button
-          type="submit"
-          size="sm"
-          className={cn("rounded-full", compact ? "h-9 px-3 sm:h-8" : "h-9 px-4 sm:h-8")}
-          disabled={isSendBusy || isConnecting}
-        >
-          {isConnecting || isSendBusy ? "Sending..." : "Refine"}
-        </Button>
-      );
-    }
-
-    return (
-      <div data-chat-composer-implement-actions="true" className="flex items-center justify-end">
-        <Button
-          type="submit"
-          size="sm"
-          className="h-9 rounded-l-full rounded-r-none px-4 sm:h-8"
-          disabled={isSendBusy || isConnecting}
-        >
-          {isConnecting || isSendBusy ? "Sending..." : "Implement"}
-        </Button>
-        <Menu>
-          <MenuTrigger
-            render={
-              <Button
-                size="sm"
-                variant="default"
-                className="h-9 rounded-l-none rounded-r-full border-l-white/12 px-2 sm:h-8"
-                aria-label="Implementation actions"
-                disabled={isSendBusy || isConnecting}
-              />
-            }
-          >
-            <ChevronDownIcon className="size-3.5" />
-          </MenuTrigger>
-          <MenuPopup align="end" side="top">
-            <MenuItem
-              disabled={isSendBusy || isConnecting}
-              onClick={() => void onImplementPlanInNewThread()}
-            >
-              Implement in a new thread
-            </MenuItem>
-          </MenuPopup>
-        </Menu>
-      </div>
     );
   }
 

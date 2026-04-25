@@ -340,12 +340,9 @@ function runtimeEventToActivities(
           createdAt: event.createdAt,
           tone: "info",
           kind: "task.started",
-          summary:
-            event.payload.taskType === "plan"
-              ? "Plan task started"
-              : event.payload.taskType
-                ? `${event.payload.taskType} task started`
-                : "Task started",
+          summary: event.payload.taskType
+            ? `${event.payload.taskType} task started`
+            : "Task started",
           payload: {
             taskId: event.payload.taskId,
             ...(event.payload.taskType ? { taskType: event.payload.taskType } : {}),

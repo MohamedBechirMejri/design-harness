@@ -6,10 +6,7 @@ import { ThreadId } from "@dh/contracts";
 import * as CodexErrors from "effect-codex-app-server/errors";
 import * as CodexRpc from "effect-codex-app-server/rpc";
 
-import {
-  CODEX_DEFAULT_MODE_DEVELOPER_INSTRUCTIONS,
-  CODEX_PLAN_MODE_DEVELOPER_INSTRUCTIONS,
-} from "../CodexDeveloperInstructions.ts";
+import { CODEX_DEFAULT_MODE_DEVELOPER_INSTRUCTIONS } from "../CodexDeveloperInstructions.ts";
 import {
   buildTurnStartParams,
   isRecoverableThreadResumeError,
@@ -40,43 +37,6 @@ function makeThreadOpenResponse(
 }
 
 describe("buildTurnStartParams", () => {
-  it("includes plan collaboration mode when requested", () => {
-    const params = Effect.runSync(
-      buildTurnStartParams({
-        threadId: "provider-thread-1",
-        runtimeMode: "full-access",
-        prompt: "Make a plan",
-        model: "gpt-5.3-codex",
-        effort: "medium",
-        interactionMode: "plan",
-      }),
-    );
-
-    assert.deepStrictEqual(params, {
-      threadId: "provider-thread-1",
-      approvalPolicy: "never",
-      sandboxPolicy: {
-        type: "dangerFullAccess",
-      },
-      input: [
-        {
-          type: "text",
-          text: "Make a plan",
-        },
-      ],
-      model: "gpt-5.3-codex",
-      effort: "medium",
-      collaborationMode: {
-        mode: "plan",
-        settings: {
-          model: "gpt-5.3-codex",
-          reasoning_effort: "medium",
-          developer_instructions: CODEX_PLAN_MODE_DEVELOPER_INSTRUCTIONS,
-        },
-      },
-    });
-  });
-
   it("includes default collaboration mode and image attachments", () => {
     const params = Effect.runSync(
       buildTurnStartParams({

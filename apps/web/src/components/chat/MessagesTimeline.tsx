@@ -31,7 +31,6 @@ import {
 } from "lucide-react";
 import { Button } from "../ui/button";
 import { buildExpandedImagePreview, ExpandedImagePreview } from "./ExpandedImagePreview";
-import { ProposedPlanCard } from "./ProposedPlanCard";
 import { DesignQuestionsCard } from "./DesignQuestionsCard";
 import { parseDesignQuestionsMessage } from "../../designQuestions";
 import { ChangedFilesTree } from "./ChangedFilesTree";
@@ -493,17 +492,6 @@ function TimelineRowContent({ row }: { row: TimelineRow }) {
             </>
           );
         })()}
-
-      {row.kind === "proposed-plan" && (
-        <div className="min-w-0 px-1 py-0.5">
-          <ProposedPlanCard
-            planMarkdown={row.proposedPlan.planMarkdown}
-            environmentId={ctx.activeThreadEnvironmentId}
-            cwd={ctx.markdownCwd}
-            workspaceRoot={ctx.workspaceRoot}
-          />
-        </div>
-      )}
 
       {row.kind === "working" && (
         <div className="py-0.5 pl-1.5">

@@ -398,47 +398,6 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
     }),
   );
 
-  it.effect("maps completed plan items to canonical proposed-plan completion events", () =>
-    Effect.gen(function* () {
-      const { adapter, runtime } = yield* startLifecycleRuntime();
-      const firstEventFiber = yield* Stream.runHead(adapter.streamEvents).pipe(Effect.forkChild);
-
-      const event: ProviderEvent = {
-        id: asEventId("evt-plan-complete"),
-        kind: "notification",
-        provider: "codex",
-        createdAt: new Date().toISOString(),
-        method: "item/completed",
-        threadId: asThreadId("thread-1"),
-        turnId: asTurnId("turn-1"),
-        itemId: asItemId("plan_1"),
-        payload: {
-          threadId: "thread-1",
-          turnId: "turn-1",
-          item: {
-            type: "plan",
-            id: "plan_1",
-            text: "## Final plan\n\n- one\n- two",
-          },
-        },
-      };
-
-      yield* runtime.emit(event);
-      const firstEvent = yield* Fiber.join(firstEventFiber);
-
-      assert.equal(firstEvent._tag, "Some");
-      if (firstEvent._tag !== "Some") {
-        return;
-      }
-      assert.equal(firstEvent.value.type, "turn.proposed.completed");
-      if (firstEvent.value.type !== "turn.proposed.completed") {
-        return;
-      }
-      assert.equal(firstEvent.value.turnId, "turn-1");
-      assert.equal(firstEvent.value.payload.planMarkdown, "## Final plan\n\n- one\n- two");
-    }),
-  );
-
   it.effect("maps plan deltas to canonical proposed-plan delta events", () =>
     Effect.gen(function* () {
       const { adapter, runtime } = yield* startLifecycleRuntime();

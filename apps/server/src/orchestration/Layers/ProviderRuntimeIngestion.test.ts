@@ -908,7 +908,7 @@ describe("ProviderRuntimeIngestion", () => {
           provider: "codex",
           model: "gpt-5-codex",
         },
-        interactionMode: "plan",
+        interactionMode: "default",
         runtimeMode: "approval-required",
         branch: null,
         worktreePath: null,
@@ -1095,7 +1095,7 @@ describe("ProviderRuntimeIngestion", () => {
           provider: "codex",
           model: "gpt-5-codex",
         },
-        interactionMode: "plan",
+        interactionMode: "default",
         runtimeMode: "approval-required",
         branch: null,
         worktreePath: null,
@@ -1248,7 +1248,7 @@ describe("ProviderRuntimeIngestion", () => {
           provider: "codex",
           model: "gpt-5-codex",
         },
-        interactionMode: "plan",
+        interactionMode: "default",
         runtimeMode: "approval-required",
         branch: null,
         worktreePath: null,
@@ -2814,7 +2814,7 @@ describe("ProviderRuntimeIngestion", () => {
         : undefined;
 
     expect(started?.kind).toBe("task.started");
-    expect(started?.summary).toBe("Plan task started");
+    expect(started?.summary).toBe("plan task started");
     expect(progress?.kind).toBe("task.progress");
     expect(progressPayload?.detail).toBe("Code reviewer is validating the desktop rollout chunks.");
     expect(progressPayload?.summary).toBe(

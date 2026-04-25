@@ -347,7 +347,7 @@ describe("decider project scripts", () => {
           type: "thread.interaction-mode.set",
           commandId: CommandId.make("cmd-interaction-mode-set"),
           threadId: ThreadId.make("thread-1"),
-          interactionMode: "plan",
+          interactionMode: "design",
           createdAt: now,
         },
         readModel,
@@ -362,7 +362,7 @@ describe("decider project scripts", () => {
       type: "thread.interaction-mode-set",
       payload: {
         threadId: ThreadId.make("thread-1"),
-        interactionMode: "plan",
+        interactionMode: "design",
       },
     });
   });

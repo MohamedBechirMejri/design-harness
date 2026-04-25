@@ -1236,16 +1236,16 @@ describe("composerDraftStore runtime and interaction settings", () => {
   it("stores interaction mode overrides in the composer draft", () => {
     const store = useComposerDraftStore.getState();
 
-    store.setInteractionMode(threadRef, "plan");
+    store.setInteractionMode(threadRef, "design");
 
-    expect(draftFor(threadId, TEST_ENVIRONMENT_ID)?.interactionMode).toBe("plan");
+    expect(draftFor(threadId, TEST_ENVIRONMENT_ID)?.interactionMode).toBe("design");
   });
 
   it("removes empty settings-only drafts when overrides are cleared", () => {
     const store = useComposerDraftStore.getState();
 
     store.setRuntimeMode(threadRef, "approval-required");
-    store.setInteractionMode(threadRef, "plan");
+    store.setInteractionMode(threadRef, "design");
     store.setRuntimeMode(threadRef, null);
     store.setInteractionMode(threadRef, null);
 

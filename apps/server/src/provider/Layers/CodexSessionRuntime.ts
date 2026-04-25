@@ -26,10 +26,7 @@ import * as CodexRpc from "effect-codex-app-server/rpc";
 import * as EffectCodexSchema from "effect-codex-app-server/schema";
 
 import { buildCodexInitializeParams } from "./CodexProvider.ts";
-import {
-  CODEX_DEFAULT_MODE_DEVELOPER_INSTRUCTIONS,
-  CODEX_PLAN_MODE_DEVELOPER_INSTRUCTIONS,
-} from "../CodexDeveloperInstructions.ts";
+import { CODEX_DEFAULT_MODE_DEVELOPER_INSTRUCTIONS } from "../CodexDeveloperInstructions.ts";
 import { renderDesignModeInstructions } from "../DesignModeInstructions.ts";
 
 const PROVIDER = "codex" as const;
@@ -300,8 +297,6 @@ function resolveCodexDeveloperInstructions(input: {
   readonly threadId: string;
 }): string {
   switch (input.interactionMode) {
-    case "plan":
-      return CODEX_PLAN_MODE_DEVELOPER_INSTRUCTIONS;
     case "design":
       return renderDesignModeInstructions({ threadId: input.threadId });
     case "default":
@@ -309,13 +304,13 @@ function resolveCodexDeveloperInstructions(input: {
   }
 }
 
-// Codex's RPC mode kind is limited to "plan" | "default". Our extended
-// interaction modes (currently "design") ride on "default" and rely on
+// Codex's RPC mode kind is limited to "plan" | "default". Our interaction
+// modes ("default" and "design") all ride on "default" and rely on
 // developer instructions to drive behavior.
 function toCodexModeKind(
-  mode: ProviderInteractionMode,
+  _mode: ProviderInteractionMode,
 ): EffectCodexSchema.V2TurnStartParams__ModeKind {
-  return mode === "plan" ? "plan" : "default";
+  return "default";
 }
 
 function buildCodexCollaborationMode(input: {
