@@ -12,41 +12,21 @@ import { useQueryClient } from "@tanstack/react-query";
 import { type ReactNode, useCallback, useMemo, useRef, useState } from "react";
 import {
   PROVIDER_DISPLAY_NAMES,
-  type DesktopUpdateChannel,
   type ScopedThreadRef,
   type ProviderKind,
   type ServerProvider,
   type ServerProviderModel,
-} from "@t3tools/contracts";
-import { scopeThreadRef } from "@t3tools/client-runtime";
-import { DEFAULT_UNIFIED_SETTINGS } from "@t3tools/contracts/settings";
-import { normalizeModelSlug } from "@t3tools/shared/model";
-import { createModelSelection } from "@t3tools/shared/model";
+} from "@dh/contracts";
+import { scopeThreadRef } from "@dh/client-runtime";
+import { DEFAULT_UNIFIED_SETTINGS } from "@dh/contracts/settings";
+import { normalizeModelSlug } from "@dh/shared/model";
 import { Equal } from "effect";
 import { APP_VERSION } from "../../branding";
-import {
-  canCheckForUpdate,
-  getDesktopUpdateButtonTooltip,
-  getDesktopUpdateInstallConfirmationMessage,
-  isDesktopUpdateButtonDisabled,
-  resolveDesktopUpdateButtonAction,
-} from "../../components/desktopUpdate.logic";
-import { ProviderModelPicker } from "../chat/ProviderModelPicker";
-import { TraitsPicker } from "../chat/TraitsPicker";
 import { resolveAndPersistPreferredEditor } from "../../editorPreferences";
-import { isElectron } from "../../env";
 import { useTheme } from "../../hooks/useTheme";
 import { useSettings, useUpdateSettings } from "../../hooks/useSettings";
 import { useThreadActions } from "../../hooks/useThreadActions";
-import {
-  setDesktopUpdateStateQueryData,
-  useDesktopUpdateState,
-} from "../../lib/desktopUpdateReactQuery";
-import {
-  MAX_CUSTOM_MODEL_LENGTH,
-  getCustomModelOptionsByProvider,
-  resolveAppModelSelectionState,
-} from "../../modelSelection";
+import { MAX_CUSTOM_MODEL_LENGTH } from "../../modelSelection";
 import { ensureLocalApi, readLocalApi } from "../../localApi";
 import { useShallow } from "zustand/react/shallow";
 import {
@@ -107,10 +87,6 @@ type InstallProviderSettings = {
   badgeLabel?: string;
   binaryPlaceholder: string;
   binaryDescription: ReactNode;
-  serverUrlPlaceholder?: string;
-  serverUrlDescription?: ReactNode;
-  serverPasswordPlaceholder?: string;
-  serverPasswordDescription?: ReactNode;
   homePathKey?: "codexHomePath";
   homePlaceholder?: string;
   homeDescription?: ReactNode;
@@ -160,7 +136,8 @@ function getProviderSummary(provider: ServerProvider | undefined) {
     return {
       headline: "Disabled",
       detail:
-        provider.message ?? "This provider is installed but disabled for new sessions in T3 Code.",
+        provider.message ??
+        "This provider is installed but disabled for new sessions in Design Harness.",
     };
   }
   if (!provider.installed) {
@@ -237,199 +214,11 @@ function AboutVersionTitle() {
   );
 }
 
-function AboutVersionSection() {
-  const queryClient = useQueryClient();
-  const updateStateQuery = useDesktopUpdateState();
-  const [isChangingUpdateChannel, setIsChangingUpdateChannel] = useState(false);
-
-  const updateState = updateStateQuery.data ?? null;
-  const hasDesktopBridge = typeof window !== "undefined" && Boolean(window.desktopBridge);
-  const selectedUpdateChannel = updateState?.channel ?? "latest";
-
-  const handleUpdateChannelChange = useCallback(
-    (channel: DesktopUpdateChannel) => {
-      const bridge = window.desktopBridge;
-      if (
-        !bridge ||
-        typeof bridge.setUpdateChannel !== "function" ||
-        channel === selectedUpdateChannel
-      ) {
-        return;
-      }
-
-      setIsChangingUpdateChannel(true);
-      void bridge
-        .setUpdateChannel(channel)
-        .then((state) => {
-          setDesktopUpdateStateQueryData(queryClient, state);
-        })
-        .catch((error: unknown) => {
-          toastManager.add({
-            type: "error",
-            title: "Could not change update track",
-            description: error instanceof Error ? error.message : "Update track change failed.",
-          });
-        })
-        .finally(() => {
-          setIsChangingUpdateChannel(false);
-        });
-    },
-    [queryClient, selectedUpdateChannel],
-  );
-
-  const handleButtonClick = useCallback(() => {
-    const bridge = window.desktopBridge;
-    if (!bridge) return;
-
-    const action = updateState ? resolveDesktopUpdateButtonAction(updateState) : "none";
-
-    if (action === "download") {
-      void bridge
-        .downloadUpdate()
-        .then((result) => {
-          setDesktopUpdateStateQueryData(queryClient, result.state);
-        })
-        .catch((error: unknown) => {
-          toastManager.add({
-            type: "error",
-            title: "Could not download update",
-            description: error instanceof Error ? error.message : "Download failed.",
-          });
-        });
-      return;
-    }
-
-    if (action === "install") {
-      const confirmed = window.confirm(
-        getDesktopUpdateInstallConfirmationMessage(
-          updateState ?? { availableVersion: null, downloadedVersion: null },
-        ),
-      );
-      if (!confirmed) return;
-      void bridge
-        .installUpdate()
-        .then((result) => {
-          setDesktopUpdateStateQueryData(queryClient, result.state);
-        })
-        .catch((error: unknown) => {
-          toastManager.add({
-            type: "error",
-            title: "Could not install update",
-            description: error instanceof Error ? error.message : "Install failed.",
-          });
-        });
-      return;
-    }
-
-    if (typeof bridge.checkForUpdate !== "function") return;
-    void bridge
-      .checkForUpdate()
-      .then((result) => {
-        setDesktopUpdateStateQueryData(queryClient, result.state);
-        if (!result.checked) {
-          toastManager.add({
-            type: "error",
-            title: "Could not check for updates",
-            description:
-              result.state.message ?? "Automatic updates are not available in this build.",
-          });
-        }
-      })
-      .catch((error: unknown) => {
-        toastManager.add({
-          type: "error",
-          title: "Could not check for updates",
-          description: error instanceof Error ? error.message : "Update check failed.",
-        });
-      });
-  }, [queryClient, updateState]);
-
-  const action = updateState ? resolveDesktopUpdateButtonAction(updateState) : "none";
-  const buttonTooltip = updateState ? getDesktopUpdateButtonTooltip(updateState) : null;
-  const buttonDisabled =
-    action === "none"
-      ? !canCheckForUpdate(updateState)
-      : isDesktopUpdateButtonDisabled(updateState);
-
-  const actionLabel: Record<string, string> = { download: "Download", install: "Install" };
-  const statusLabel: Record<string, string> = {
-    checking: "Checking…",
-    downloading: "Downloading…",
-    "up-to-date": "Up to Date",
-  };
-  const buttonLabel =
-    actionLabel[action] ?? statusLabel[updateState?.status ?? ""] ?? "Check for Updates";
-  const description =
-    action === "download" || action === "install"
-      ? "Update available."
-      : "Current version of the application.";
-
-  return (
-    <>
-      <SettingsRow
-        title={<AboutVersionTitle />}
-        description={description}
-        control={
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  size="xs"
-                  variant={action === "install" ? "default" : "outline"}
-                  disabled={buttonDisabled}
-                  onClick={handleButtonClick}
-                >
-                  {buttonLabel}
-                </Button>
-              }
-            />
-            {buttonTooltip ? <TooltipPopup>{buttonTooltip}</TooltipPopup> : null}
-          </Tooltip>
-        }
-      />
-      <SettingsRow
-        title="Update track"
-        description="Stable follows full releases. Nightly follows the nightly desktop channel and can switch back to stable immediately."
-        control={
-          <Select
-            value={selectedUpdateChannel}
-            onValueChange={(value) => {
-              handleUpdateChannelChange(value as DesktopUpdateChannel);
-            }}
-          >
-            <SelectTrigger
-              className="w-full sm:w-40"
-              aria-label="Update track"
-              disabled={!hasDesktopBridge || isChangingUpdateChannel}
-            >
-              <SelectValue>
-                {selectedUpdateChannel === "nightly" ? "Nightly" : "Stable"}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectPopup align="end" alignItemWithTrigger={false}>
-              <SelectItem hideIndicator value="latest">
-                Stable
-              </SelectItem>
-              <SelectItem hideIndicator value="nightly">
-                Nightly
-              </SelectItem>
-            </SelectPopup>
-          </Select>
-        }
-      />
-    </>
-  );
-}
-
 export function useSettingsRestore(onRestored?: () => void) {
   const { theme, setTheme } = useTheme();
   const settings = useSettings();
   const { resetSettings } = useUpdateSettings();
 
-  const isGitWritingModelDirty = !Equal.equals(
-    settings.textGenerationModelSelection ?? null,
-    DEFAULT_UNIFIED_SETTINGS.textGenerationModelSelection ?? null,
-  );
   const areProviderSettingsDirty = PROVIDER_SETTINGS.some((providerSettings) => {
     const currentSettings = settings.providers[providerSettings.provider];
     const defaultSettings = DEFAULT_UNIFIED_SETTINGS.providers[providerSettings.provider];
@@ -460,12 +249,10 @@ export function useSettingsRestore(onRestored?: () => void) {
       ...(settings.confirmThreadDelete !== DEFAULT_UNIFIED_SETTINGS.confirmThreadDelete
         ? ["Delete confirmation"]
         : []),
-      ...(isGitWritingModelDirty ? ["Git writing model"] : []),
       ...(areProviderSettingsDirty ? ["Providers"] : []),
     ],
     [
       areProviderSettingsDirty,
-      isGitWritingModelDirty,
       settings.confirmThreadArchive,
       settings.confirmThreadDelete,
       settings.addProjectBaseDirectory,
@@ -521,28 +308,12 @@ export function GeneralSettingsPanel() {
       settings.providers.claudeAgent.customModels.length > 0 ||
       settings.providers.claudeAgent.launchArgs !== "",
     ),
-    cursor: Boolean(
-      settings.providers.cursor.binaryPath !==
-        DEFAULT_UNIFIED_SETTINGS.providers.cursor.binaryPath ||
-      settings.providers.cursor.customModels.length > 0,
-    ),
-    opencode: Boolean(
-      settings.providers.opencode.binaryPath !==
-        DEFAULT_UNIFIED_SETTINGS.providers.opencode.binaryPath ||
-      settings.providers.opencode.serverUrl !==
-        DEFAULT_UNIFIED_SETTINGS.providers.opencode.serverUrl ||
-      settings.providers.opencode.serverPassword !==
-        DEFAULT_UNIFIED_SETTINGS.providers.opencode.serverPassword ||
-      settings.providers.opencode.customModels.length > 0,
-    ),
   });
   const [customModelInputByProvider, setCustomModelInputByProvider] = useState<
     Record<ProviderKind, string>
   >({
     codex: "",
     claudeAgent: "",
-    cursor: "",
-    opencode: "",
   });
   const [customModelErrorByProvider, setCustomModelErrorByProvider] = useState<
     Partial<Record<ProviderKind, string | null>>
@@ -569,11 +340,7 @@ export function GeneralSettingsPanel() {
   const availableEditors = useServerAvailableEditors();
   const observability = useServerObservability();
   const serverProviders = useServerProviders();
-  const visibleProviderSettings = PROVIDER_SETTINGS.filter(
-    (providerSettings) =>
-      providerSettings.provider !== "cursor" ||
-      serverProviders.some((provider) => provider.provider === "cursor"),
-  );
+  const visibleProviderSettings = PROVIDER_SETTINGS;
   const codexHomePath = settings.providers.codex.homePath;
   const logsDirectoryPath = observability?.logsDirectoryPath ?? null;
   const diagnosticsDescription = (() => {
@@ -587,21 +354,6 @@ export function GeneralSettingsPanel() {
     const mode = observability?.localTracingEnabled ? "Local trace file" : "Terminal logs only";
     return exports.length > 0 ? `${mode}. OTLP exporting ${exports.join(" and ")}.` : `${mode}.`;
   })();
-
-  const textGenerationModelSelection = resolveAppModelSelectionState(settings, serverProviders);
-  const textGenProvider = textGenerationModelSelection.provider;
-  const textGenModel = textGenerationModelSelection.model;
-  const textGenModelOptions = textGenerationModelSelection.options;
-  const gitModelOptionsByProvider = getCustomModelOptionsByProvider(
-    settings,
-    serverProviders,
-    textGenProvider,
-    textGenModel,
-  );
-  const isGitWritingModelDirty = !Equal.equals(
-    settings.textGenerationModelSelection ?? null,
-    DEFAULT_UNIFIED_SETTINGS.textGenerationModelSelection ?? null,
-  );
 
   const openInPreferredEditor = useCallback(
     (target: "keybindings" | "logsDirectory", path: string | null, failureMessage: string) => {
@@ -761,16 +513,10 @@ export function GeneralSettingsPanel() {
       badgeLabel: providerSettings.badgeLabel,
       binaryPlaceholder: providerSettings.binaryPlaceholder,
       binaryDescription: providerSettings.binaryDescription,
-      serverUrlPlaceholder: providerSettings.serverUrlPlaceholder,
-      serverUrlDescription: providerSettings.serverUrlDescription,
-      serverPasswordPlaceholder: providerSettings.serverPasswordPlaceholder,
-      serverPasswordDescription: providerSettings.serverPasswordDescription,
       homePathKey: providerSettings.homePathKey,
       homePlaceholder: providerSettings.homePlaceholder,
       homeDescription: providerSettings.homeDescription,
       binaryPathValue: providerConfig.binaryPath,
-      serverUrlValue: "serverUrl" in providerConfig ? providerConfig.serverUrl : "",
-      serverPasswordValue: "serverPassword" in providerConfig ? providerConfig.serverPassword : "",
       isDirty: !Equal.equals(providerConfig, defaultProviderConfig),
       liveProvider,
       models,
@@ -794,7 +540,7 @@ export function GeneralSettingsPanel() {
       <SettingsSection title="General">
         <SettingsRow
           title="Theme"
-          description="Choose how T3 Code looks across the app."
+          description="Choose how Design Harness looks across the app."
           resetAction={
             theme !== "system" ? (
               <SettingResetButton label="theme" onClick={() => setTheme("system")} />
@@ -1038,77 +784,6 @@ export function GeneralSettingsPanel() {
             />
           }
         />
-
-        <SettingsRow
-          title="Text generation model"
-          description="Configure the model used for generated commit messages, PR titles, and similar Git text."
-          resetAction={
-            isGitWritingModelDirty ? (
-              <SettingResetButton
-                label="text generation model"
-                onClick={() =>
-                  updateSettings({
-                    textGenerationModelSelection:
-                      DEFAULT_UNIFIED_SETTINGS.textGenerationModelSelection,
-                  })
-                }
-              />
-            ) : null
-          }
-          control={
-            <div className="flex flex-wrap items-center justify-end gap-1.5">
-              <ProviderModelPicker
-                provider={textGenProvider}
-                model={textGenModel}
-                lockedProvider={null}
-                providers={serverProviders}
-                modelOptionsByProvider={gitModelOptionsByProvider}
-                triggerVariant="outline"
-                triggerClassName="min-w-0 max-w-none shrink-0 text-foreground/90 hover:text-foreground"
-                onProviderModelChange={(provider, model) => {
-                  updateSettings({
-                    textGenerationModelSelection: resolveAppModelSelectionState(
-                      {
-                        ...settings,
-                        textGenerationModelSelection: createModelSelection(provider, model),
-                      },
-                      serverProviders,
-                    ),
-                  });
-                }}
-              />
-              <TraitsPicker
-                provider={textGenProvider}
-                models={
-                  serverProviders.find((provider) => provider.provider === textGenProvider)
-                    ?.models ?? []
-                }
-                model={textGenModel}
-                prompt=""
-                onPromptChange={() => {}}
-                modelOptions={textGenModelOptions}
-                allowPromptInjectedEffort={false}
-                triggerVariant="outline"
-                triggerClassName="min-w-0 max-w-none shrink-0 text-foreground/90 hover:text-foreground"
-                onModelOptionsChange={(nextOptions) => {
-                  updateSettings({
-                    textGenerationModelSelection: resolveAppModelSelectionState(
-                      {
-                        ...settings,
-                        textGenerationModelSelection: createModelSelection(
-                          textGenProvider,
-                          textGenModel,
-                          nextOptions,
-                        ),
-                      },
-                      serverProviders,
-                    ),
-                  });
-                }}
-              />
-            </div>
-          }
-        />
       </SettingsSection>
 
       <SettingsSection
@@ -1215,9 +890,6 @@ export function GeneralSettingsPanel() {
                     <Switch
                       checked={providerCard.providerConfig.enabled}
                       onCheckedChange={(checked) => {
-                        const isDisabling = !checked;
-                        const shouldClearModelSelection =
-                          isDisabling && textGenProvider === providerCard.provider;
                         updateSettings({
                           providers: {
                             ...settings.providers,
@@ -1226,12 +898,6 @@ export function GeneralSettingsPanel() {
                               enabled: Boolean(checked),
                             },
                           },
-                          ...(shouldClearModelSelection
-                            ? {
-                                textGenerationModelSelection:
-                                  DEFAULT_UNIFIED_SETTINGS.textGenerationModelSelection,
-                              }
-                            : {}),
                         });
                       }}
                       aria-label={`Enable ${providerDisplayName}`}
@@ -1282,84 +948,6 @@ export function GeneralSettingsPanel() {
                         </span>
                       </label>
                     </div>
-
-                    {providerCard.serverUrlPlaceholder ? (
-                      <div className="border-t border-border/60 px-4 py-3 sm:px-5">
-                        <label
-                          htmlFor={`provider-install-${providerCard.provider}-server-url`}
-                          className="block"
-                        >
-                          <span className="text-xs font-medium text-foreground">
-                            {providerDisplayName} server URL
-                          </span>
-                          <Input
-                            id={`provider-install-${providerCard.provider}-server-url`}
-                            className="mt-1.5"
-                            value={providerCard.serverUrlValue}
-                            onChange={(event) =>
-                              updateSettings({
-                                providers: {
-                                  ...settings.providers,
-                                  [providerCard.provider]: {
-                                    ...settings.providers[providerCard.provider],
-                                    ...(providerCard.provider === "opencode"
-                                      ? { serverUrl: event.target.value }
-                                      : {}),
-                                  },
-                                },
-                              })
-                            }
-                            placeholder={providerCard.serverUrlPlaceholder}
-                            spellCheck={false}
-                          />
-                          {providerCard.serverUrlDescription ? (
-                            <span className="mt-1 block text-xs text-muted-foreground">
-                              {providerCard.serverUrlDescription}
-                            </span>
-                          ) : null}
-                        </label>
-                      </div>
-                    ) : null}
-
-                    {providerCard.serverPasswordPlaceholder ? (
-                      <div className="border-t border-border/60 px-4 py-3 sm:px-5">
-                        <label
-                          htmlFor={`provider-install-${providerCard.provider}-server-password`}
-                          className="block"
-                        >
-                          <span className="text-xs font-medium text-foreground">
-                            {providerDisplayName} server password
-                          </span>
-                          <Input
-                            id={`provider-install-${providerCard.provider}-server-password`}
-                            className="mt-1.5"
-                            type="password"
-                            autoComplete="off"
-                            value={providerCard.serverPasswordValue}
-                            onChange={(event) =>
-                              updateSettings({
-                                providers: {
-                                  ...settings.providers,
-                                  [providerCard.provider]: {
-                                    ...settings.providers[providerCard.provider],
-                                    ...(providerCard.provider === "opencode"
-                                      ? { serverPassword: event.target.value }
-                                      : {}),
-                                  },
-                                },
-                              })
-                            }
-                            placeholder={providerCard.serverPasswordPlaceholder}
-                            spellCheck={false}
-                          />
-                          {providerCard.serverPasswordDescription ? (
-                            <span className="mt-1 block text-xs text-muted-foreground">
-                              {providerCard.serverPasswordDescription}
-                            </span>
-                          ) : null}
-                        </label>
-                      </div>
-                    ) : null}
 
                     {providerCard.homePathKey ? (
                       <div className="border-t border-border/60 px-4 py-3 sm:px-5">
@@ -1540,9 +1128,7 @@ export function GeneralSettingsPanel() {
                           placeholder={
                             providerCard.provider === "codex"
                               ? "gpt-6.7-codex-ultra-preview"
-                              : providerCard.provider === "opencode"
-                                ? "openai/gpt-5"
-                                : "claude-sonnet-5-0"
+                              : "claude-sonnet-5-0"
                           }
                           spellCheck={false}
                         />
@@ -1598,14 +1184,10 @@ export function GeneralSettingsPanel() {
       </SettingsSection>
 
       <SettingsSection title="About">
-        {isElectron ? (
-          <AboutVersionSection />
-        ) : (
-          <SettingsRow
-            title={<AboutVersionTitle />}
-            description="Current version of the application."
-          />
-        )}
+        <SettingsRow
+          title={<AboutVersionTitle />}
+          description="Current version of the application."
+        />
         <SettingsRow
           title="Diagnostics"
           description={diagnosticsDescription}

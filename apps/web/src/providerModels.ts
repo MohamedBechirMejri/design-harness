@@ -1,17 +1,11 @@
 import {
   DEFAULT_MODEL_BY_PROVIDER,
-  type CursorModelOptions,
   type ModelCapabilities,
   type ProviderKind,
   type ServerProvider,
   type ServerProviderModel,
-} from "@t3tools/contracts";
-import {
-  hasEffortLevel,
-  normalizeModelSlug,
-  resolveContextWindow,
-  trimOrNull,
-} from "@t3tools/shared/model";
+} from "@dh/contracts";
+import { normalizeModelSlug } from "@dh/shared/model";
 
 const EMPTY_CAPABILITIES: ModelCapabilities = {
   reasoningEffortLevels: [],
@@ -49,7 +43,9 @@ export function resolveSelectableProvider(
   providers: ReadonlyArray<ServerProvider>,
   provider: ProviderKind | null | undefined,
 ): ProviderKind {
-  const requested = provider ?? "codex";
+  // Design Harness defaults to claudeAgent when no preference is set —
+  // Claude Sonnet produces noticeably better HTML/CSS for design output.
+  const requested = provider ?? "claudeAgent";
   if (isProviderEnabled(providers, requested)) {
     return requested;
   }
@@ -75,31 +71,4 @@ export function getDefaultServerModel(
     models[0]?.slug ??
     DEFAULT_MODEL_BY_PROVIDER[provider]
   );
-}
-
-export function normalizeCursorModelOptionsWithCapabilities(
-  caps: ModelCapabilities,
-  modelOptions: CursorModelOptions | null | undefined,
-): CursorModelOptions | undefined {
-  const reasoning = trimOrNull(modelOptions?.reasoning);
-  const reasoningValue =
-    reasoning && hasEffortLevel(caps, reasoning)
-      ? (reasoning as CursorModelOptions["reasoning"])
-      : undefined;
-  const fastMode =
-    caps.supportsFastMode && typeof modelOptions?.fastMode === "boolean"
-      ? modelOptions.fastMode
-      : undefined;
-  const thinking =
-    caps.supportsThinkingToggle && typeof modelOptions?.thinking === "boolean"
-      ? modelOptions.thinking
-      : undefined;
-  const contextWindow = resolveContextWindow(caps, modelOptions?.contextWindow);
-  const nextOptions: CursorModelOptions = {
-    ...(reasoningValue ? { reasoning: reasoningValue } : {}),
-    ...(fastMode !== undefined ? { fastMode } : {}),
-    ...(thinking !== undefined ? { thinking } : {}),
-    ...(contextWindow ? { contextWindow } : {}),
-  };
-  return Object.keys(nextOptions).length > 0 ? nextOptions : undefined;
 }

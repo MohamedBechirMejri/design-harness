@@ -14,17 +14,15 @@ import {
   OrchestrationThreadActivity,
   ProviderInteractionMode,
   RuntimeMode,
-} from "@t3tools/contracts";
-import { scopedThreadKey, scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime";
-import { applyClaudePromptEffortPrefix, createModelSelection } from "@t3tools/shared/model";
-import { truncate } from "@t3tools/shared/String";
+} from "@dh/contracts";
+import { scopedThreadKey, scopeProjectRef, scopeThreadRef } from "@dh/client-runtime";
+import { applyClaudePromptEffortPrefix, createModelSelection } from "@dh/shared/model";
+import { truncate } from "@dh/shared/String";
 import { Debouncer } from "@tanstack/react-pacer";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useGitStatus } from "~/lib/gitStatusState";
-import { usePrimaryEnvironmentId } from "../environments/primary";
 import { readEnvironmentApi } from "../environmentApi";
-import { isElectron } from "../env";
 import { readLocalApi } from "../localApi";
 import {
   collapseExpandedComposerCursor,
@@ -38,10 +36,7 @@ import {
   deriveTimelineEntries,
   deriveActiveWorkStartedAt,
   deriveActivePlanState,
-  findSidebarProposedPlan,
-  findLatestProposedPlan,
   deriveWorkLogEntries,
-  hasActionableProposedPlan,
   hasToolActivityForTurn,
   isLatestTurnSettled,
   formatElapsed,
@@ -58,11 +53,6 @@ import { useStore } from "../store";
 import { createProjectSelectorByRef, createThreadSelectorByRef } from "../storeSelectors";
 import { useUiStateStore } from "../uiStateStore";
 import {
-  buildPlanImplementationThreadTitle,
-  buildPlanImplementationPrompt,
-  resolvePlanFollowUpSubmission,
-} from "../proposedPlan";
-import {
   DEFAULT_INTERACTION_MODE,
   DEFAULT_RUNTIME_MODE,
   DEFAULT_THREAD_TERMINAL_ID,
@@ -77,6 +67,7 @@ import { useTurnDiffSummaries } from "../hooks/useTurnDiffSummaries";
 import { useCommandPaletteStore } from "../commandPaletteStore";
 import { resolveShortcutCommand } from "../keybindings";
 import DesignPreviewSidebar from "./DesignPreviewSidebar";
+import { AppTopBar } from "./AppTopBar";
 import { ChevronDownIcon } from "lucide-react";
 import { cn, randomUUID } from "~/lib/utils";
 import { toastManager } from "./ui/toast";
@@ -85,7 +76,6 @@ import { getProviderModelCapabilities, resolveSelectableProvider } from "../prov
 import { useSettings } from "../hooks/useSettings";
 import { resolveAppModelSelection } from "../modelSelection";
 import { isTerminalFocused } from "../lib/terminalFocus";
-import { useSavedEnvironmentRuntimeStore } from "../environments/runtime";
 import {
   type ComposerImageAttachment,
   type DraftThreadEnvMode,
@@ -131,124 +121,8 @@ import { retainThreadDetailSubscription } from "../environments/runtime/service"
 const IMAGE_ONLY_BOOTSTRAP_PROMPT =
   "[User attached one or more images without additional text. Respond using the conversation context and the attached image(s).]";
 const EMPTY_ACTIVITIES: OrchestrationThreadActivity[] = [];
-const EMPTY_PROPOSED_PLANS: Thread["proposedPlans"] = [];
 const EMPTY_PROVIDERS: ServerProvider[] = [];
 const EMPTY_PENDING_USER_INPUT_ANSWERS: Record<string, PendingUserInputDraftAnswer> = {};
-
-type ThreadPlanCatalogEntry = Pick<Thread, "id" | "proposedPlans">;
-
-function useThreadPlanCatalog(threadIds: readonly ThreadId[]): ThreadPlanCatalogEntry[] {
-  return useStore(
-    useMemo(() => {
-      let previousThreadIds: readonly ThreadId[] = [];
-      let previousResult: ThreadPlanCatalogEntry[] = [];
-      let previousEntries = new Map<
-        ThreadId,
-        {
-          shell: object | null;
-          proposedPlanIds: readonly string[] | undefined;
-          proposedPlansById: Record<string, Thread["proposedPlans"][number]> | undefined;
-          entry: ThreadPlanCatalogEntry;
-        }
-      >();
-
-      return (state) => {
-        const sameThreadIds =
-          previousThreadIds.length === threadIds.length &&
-          previousThreadIds.every((id, index) => id === threadIds[index]);
-        const nextEntries = new Map<
-          ThreadId,
-          {
-            shell: object | null;
-            proposedPlanIds: readonly string[] | undefined;
-            proposedPlansById: Record<string, Thread["proposedPlans"][number]> | undefined;
-            entry: ThreadPlanCatalogEntry;
-          }
-        >();
-        const nextResult: ThreadPlanCatalogEntry[] = [];
-        let changed = !sameThreadIds;
-
-        for (const threadId of threadIds) {
-          let shell: object | undefined;
-          let proposedPlanIds: readonly string[] | undefined;
-          let proposedPlansById: Record<string, Thread["proposedPlans"][number]> | undefined;
-
-          for (const environmentState of Object.values(state.environmentStateById)) {
-            const matchedShell = environmentState.threadShellById[threadId];
-            if (!matchedShell) {
-              continue;
-            }
-            shell = matchedShell;
-            proposedPlanIds = environmentState.proposedPlanIdsByThreadId[threadId];
-            proposedPlansById = environmentState.proposedPlanByThreadId[threadId] as
-              | Record<string, Thread["proposedPlans"][number]>
-              | undefined;
-            break;
-          }
-
-          if (!shell) {
-            const previous = previousEntries.get(threadId);
-            if (
-              previous &&
-              previous.shell === null &&
-              previous.proposedPlanIds === undefined &&
-              previous.proposedPlansById === undefined
-            ) {
-              nextEntries.set(threadId, previous);
-              continue;
-            }
-            changed = true;
-            nextEntries.set(threadId, {
-              shell: null,
-              proposedPlanIds: undefined,
-              proposedPlansById: undefined,
-              entry: { id: threadId, proposedPlans: EMPTY_PROPOSED_PLANS },
-            });
-            continue;
-          }
-
-          const previous = previousEntries.get(threadId);
-          if (
-            previous &&
-            previous.shell === shell &&
-            previous.proposedPlanIds === proposedPlanIds &&
-            previous.proposedPlansById === proposedPlansById
-          ) {
-            nextEntries.set(threadId, previous);
-            nextResult.push(previous.entry);
-            continue;
-          }
-
-          changed = true;
-          const proposedPlans =
-            proposedPlanIds && proposedPlanIds.length > 0 && proposedPlansById
-              ? proposedPlanIds.flatMap((planId) => {
-                  const proposedPlan = proposedPlansById?.[planId];
-                  return proposedPlan ? [proposedPlan] : [];
-                })
-              : EMPTY_PROPOSED_PLANS;
-          const entry = { id: threadId, proposedPlans };
-          nextEntries.set(threadId, {
-            shell,
-            proposedPlanIds,
-            proposedPlansById,
-            entry,
-          });
-          nextResult.push(entry);
-        }
-
-        if (!changed && previousResult.length === nextResult.length) {
-          return previousResult;
-        }
-
-        previousThreadIds = threadIds;
-        previousEntries = nextEntries;
-        previousResult = nextResult;
-        return nextResult;
-      };
-    }, [threadIds]),
-  );
-}
 
 function formatOutgoingPrompt(params: {
   provider: ProviderKind;
@@ -427,8 +301,6 @@ export default function ChatView(props: ChatViewProps) {
   >({});
   const [pendingUserInputQuestionIndexByRequestId, setPendingUserInputQuestionIndexByRequestId] =
     useState<Record<string, number>>({});
-  const [, setDesignSidebarOpen] = useState(false);
-  const [designSidebarManuallyClosed, setDesignSidebarManuallyClosed] = useState(false);
   const [attachmentPreviewHandoffByMessageId, setAttachmentPreviewHandoffByMessageId] = useState<
     Record<string, string[]>
   >({});
@@ -478,19 +350,6 @@ export default function ChatView(props: ChatViewProps) {
   );
   const activeThreadKey = activeThreadRef ? scopedThreadKey(activeThreadRef) : null;
   const activeLatestTurn = activeThread?.latestTurn ?? null;
-  const threadPlanCatalog = useThreadPlanCatalog(
-    useMemo(() => {
-      const threadIds: ThreadId[] = [];
-      if (activeThread?.id) {
-        threadIds.push(activeThread.id);
-      }
-      const sourceThreadId = activeLatestTurn?.sourceProposedPlan?.threadId;
-      if (sourceThreadId && sourceThreadId !== activeThread?.id) {
-        threadIds.push(sourceThreadId);
-      }
-      return threadIds;
-    }, [activeLatestTurn?.sourceProposedPlan?.threadId, activeThread?.id]),
-  );
   const latestTurnSettled = isLatestTurnSettled(activeLatestTurn, activeThread?.session ?? null);
   const activeProjectRef = activeThread
     ? scopeProjectRef(activeThread.environmentId, activeThread.projectId)
@@ -533,18 +392,7 @@ export default function ChatView(props: ChatViewProps) {
     selectedProvider: selectedProviderByThreadId,
     threadProvider,
   });
-  const primaryServerConfig = useServerConfig();
-  const activeEnvRuntimeState = useSavedEnvironmentRuntimeStore((s) =>
-    activeThread?.environmentId ? s.byId[activeThread.environmentId] : null,
-  );
-  // Use the server config for the thread's environment.  For the primary
-  // environment fall back to the global atom; for remote environments use
-  // the runtime state stored by the environment manager.
-  const primaryEnvironmentId = usePrimaryEnvironmentId();
-  const serverConfig =
-    primaryEnvironmentId && activeThread?.environmentId === primaryEnvironmentId
-      ? primaryServerConfig
-      : (activeEnvRuntimeState?.serverConfig ?? primaryServerConfig);
+  const serverConfig = useServerConfig();
   const providerStatuses = serverConfig?.providers ?? EMPTY_PROVIDERS;
   const unlockedSelectedProvider = resolveSelectableProvider(
     providerStatuses,
@@ -602,34 +450,10 @@ export default function ChatView(props: ChatViewProps) {
   const activePendingIsResponding = activePendingUserInput
     ? respondingUserInputRequestIds.includes(activePendingUserInput.requestId)
     : false;
-  const activeProposedPlan = useMemo(() => {
-    if (!latestTurnSettled) {
-      return null;
-    }
-    return findLatestProposedPlan(
-      activeThread?.proposedPlans ?? [],
-      activeLatestTurn?.turnId ?? null,
-    );
-  }, [activeLatestTurn?.turnId, activeThread?.proposedPlans, latestTurnSettled]);
-  const sidebarProposedPlan = useMemo(
-    () =>
-      findSidebarProposedPlan({
-        threads: threadPlanCatalog,
-        latestTurn: activeLatestTurn,
-        latestTurnSettled,
-        threadId: activeThread?.id ?? null,
-      }),
-    [activeLatestTurn, activeThread?.id, latestTurnSettled, threadPlanCatalog],
-  );
   const activePlan = useMemo(
     () => deriveActivePlanState(threadActivities, activeLatestTurn?.turnId ?? undefined),
     [activeLatestTurn?.turnId, threadActivities],
   );
-  const showPlanFollowUpPrompt =
-    pendingUserInputs.length === 0 &&
-    interactionMode === "plan" &&
-    latestTurnSettled &&
-    hasActionableProposedPlan(activeProposedPlan);
   const activePendingApproval = pendingApprovals[0] ?? null;
   const {
     beginLocalDispatch,
@@ -984,10 +808,6 @@ export default function ChatView(props: ChatViewProps) {
       setDraftThreadContext,
     ],
   );
-  const closeDesignSidebar = useCallback(() => {
-    setDesignSidebarOpen(false);
-    setDesignSidebarManuallyClosed(true);
-  }, []);
 
   const persistThreadSettingsForNextTurn = useCallback(
     async (input: {
@@ -1069,45 +889,7 @@ export default function ChatView(props: ChatViewProps) {
     isAtEndRef.current = true;
     showScrollDebouncer.current.cancel();
     setShowScrollToBottom(false);
-    setDesignSidebarOpen(false);
-    setDesignSidebarManuallyClosed(false);
   }, [activeThread?.id]);
-
-  useEffect(() => {
-    if (!activeThread?.id || !activeWorkspaceRoot) return undefined;
-    const threadId = activeThread.id;
-    const cwd = activeWorkspaceRoot;
-    const envId = activeThread.environmentId;
-    let cancelled = false;
-    const check = async () => {
-      const api = readEnvironmentApi(envId);
-      if (!api) return;
-      try {
-        const result = await api.designPreview.list({ cwd, threadId });
-        if (cancelled) return;
-        if (result.entries.length > 0) {
-          setDesignSidebarOpen((open) => {
-            if (open) return open;
-            if (designSidebarManuallyClosed) return open;
-            return true;
-          });
-        }
-      } catch {
-        // Swallow — the directory may not exist yet.
-      }
-    };
-    void check();
-    const interval = window.setInterval(check, 3000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(interval);
-    };
-  }, [
-    activeThread?.id,
-    activeThread?.environmentId,
-    activeWorkspaceRoot,
-    designSidebarManuallyClosed,
-  ]);
 
   // Auto-open the plan sidebar when plan/todo steps arrive for the current turn.
   useEffect(() => {
@@ -1312,20 +1094,6 @@ export default function ChatView(props: ChatViewProps) {
       imageCount: composerImages.length,
       terminalContexts: composerTerminalContexts,
     });
-    if (showPlanFollowUpPrompt && activeProposedPlan) {
-      const followUp = resolvePlanFollowUpSubmission({
-        draftText: trimmed,
-        planMarkdown: activeProposedPlan.planMarkdown,
-      });
-      promptRef.current = "";
-      clearComposerDraftContent(composerDraftTarget);
-      composerRef.current?.resetCursorState();
-      await onSubmitPlanFollowUp({
-        text: followUp.text,
-        interactionMode: followUp.interactionMode,
-      });
-      return;
-    }
     const standaloneSlashCommand =
       composerImages.length === 0 && sendableComposerTerminalContexts.length === 0
         ? parseStandaloneComposerSlashCommand(trimmed)
@@ -1547,13 +1315,33 @@ export default function ChatView(props: ChatViewProps) {
     }
   };
 
+  const interruptAttemptRef = useRef<{ threadId: string; firstAt: number } | null>(null);
   const onInterrupt = async () => {
     const api = readEnvironmentApi(environmentId);
     if (!api || !activeThread) return;
+    const threadId = activeThread.id;
+    const previous = interruptAttemptRef.current;
+    const now = Date.now();
+    // Second click within ~10s on the same thread → escalate from a
+    // graceful turn.interrupt to a hard session.stop so the underlying
+    // provider process is killed if the model isn't honoring the
+    // interrupt mid-tool-call.
+    const shouldEscalate = previous?.threadId === threadId && now - previous.firstAt <= 10_000;
+    if (shouldEscalate) {
+      interruptAttemptRef.current = null;
+      await api.orchestration.dispatchCommand({
+        type: "thread.session.stop",
+        commandId: newCommandId(),
+        threadId,
+        createdAt: new Date().toISOString(),
+      });
+      return;
+    }
+    interruptAttemptRef.current = { threadId, firstAt: now };
     await api.orchestration.dispatchCommand({
       type: "thread.turn.interrupt",
       commandId: newCommandId(),
-      threadId: activeThread.id,
+      threadId,
       createdAt: new Date().toISOString(),
     });
   };
@@ -1720,14 +1508,8 @@ export default function ChatView(props: ChatViewProps) {
     setActivePendingUserInputQuestionIndex(Math.max(activePendingProgress.questionIndex - 1, 0));
   }, [activePendingProgress, setActivePendingUserInputQuestionIndex]);
 
-  const onSubmitPlanFollowUp = useCallback(
-    async ({
-      text,
-      interactionMode: nextInteractionMode,
-    }: {
-      text: string;
-      interactionMode: "default" | "plan" | "design";
-    }) => {
+  const onSubmitDesignAnswers = useCallback(
+    async (compiledText: string) => {
       const api = readEnvironmentApi(environmentId);
       if (
         !api ||
@@ -1740,7 +1522,7 @@ export default function ChatView(props: ChatViewProps) {
         return;
       }
 
-      const trimmed = text.trim();
+      const trimmed = compiledText.trim();
       if (!trimmed) {
         return;
       }
@@ -1795,14 +1577,12 @@ export default function ChatView(props: ChatViewProps) {
           createdAt: messageCreatedAt,
           modelSelection: ctxSelectedModelSelection,
           runtimeMode,
-          interactionMode: nextInteractionMode,
+          interactionMode: "design",
         });
 
-        // Keep the mode toggle and plan-follow-up banner in sync immediately
-        // while the same-thread implementation turn is starting.
         setComposerDraftInteractionMode(
           scopeThreadRef(activeThread.environmentId, threadIdForSend),
-          nextInteractionMode,
+          "design",
         );
 
         await api.orchestration.dispatchCommand({
@@ -1818,15 +1598,7 @@ export default function ChatView(props: ChatViewProps) {
           modelSelection: ctxSelectedModelSelection,
           titleSeed: activeThread.title,
           runtimeMode,
-          interactionMode: nextInteractionMode,
-          ...(nextInteractionMode === "default" && activeProposedPlan
-            ? {
-                sourceProposedPlan: {
-                  threadId: activeThread.id,
-                  planId: activeProposedPlan.id,
-                },
-              }
-            : {}),
+          interactionMode: "design",
           createdAt: messageCreatedAt,
         });
         sendInFlightRef.current = false;
@@ -1836,7 +1608,7 @@ export default function ChatView(props: ChatViewProps) {
         );
         setThreadError(
           threadIdForSend,
-          err instanceof Error ? err.message : "Failed to send plan follow-up.",
+          err instanceof Error ? err.message : "Failed to send design follow-up.",
         );
         sendInFlightRef.current = false;
         resetLocalDispatch();
@@ -1844,7 +1616,6 @@ export default function ChatView(props: ChatViewProps) {
     },
     [
       activeThread,
-      activeProposedPlan,
       beginLocalDispatch,
       isConnecting,
       isSendBusy,
@@ -1857,143 +1628,6 @@ export default function ChatView(props: ChatViewProps) {
       environmentId,
     ],
   );
-
-  const onSubmitDesignAnswers = useCallback(
-    async (compiledText: string) => {
-      await onSubmitPlanFollowUp({
-        text: compiledText,
-        interactionMode: "design",
-      });
-    },
-    [onSubmitPlanFollowUp],
-  );
-
-  const onImplementPlanInNewThread = useCallback(async () => {
-    const api = readEnvironmentApi(environmentId);
-    if (
-      !api ||
-      !activeThread ||
-      !activeProject ||
-      !activeProposedPlan ||
-      !isServerThread ||
-      isSendBusy ||
-      isConnecting ||
-      sendInFlightRef.current
-    ) {
-      return;
-    }
-
-    const sendCtx = composerRef.current?.getSendContext();
-    if (!sendCtx) {
-      return;
-    }
-    const {
-      selectedProvider: ctxSelectedProvider,
-      selectedModel: ctxSelectedModel,
-      selectedProviderModels: ctxSelectedProviderModels,
-      selectedPromptEffort: ctxSelectedPromptEffort,
-      selectedModelSelection: ctxSelectedModelSelection,
-    } = sendCtx;
-
-    const createdAt = new Date().toISOString();
-    const nextThreadId = newThreadId();
-    const planMarkdown = activeProposedPlan.planMarkdown;
-    const implementationPrompt = buildPlanImplementationPrompt(planMarkdown);
-    const outgoingImplementationPrompt = formatOutgoingPrompt({
-      provider: ctxSelectedProvider,
-      model: ctxSelectedModel,
-      models: ctxSelectedProviderModels,
-      effort: ctxSelectedPromptEffort,
-      text: implementationPrompt,
-    });
-    const nextThreadTitle = truncate(buildPlanImplementationThreadTitle(planMarkdown));
-    const nextThreadModelSelection: ModelSelection = ctxSelectedModelSelection;
-
-    sendInFlightRef.current = true;
-    beginLocalDispatch({ preparingWorktree: false });
-    const finish = () => {
-      sendInFlightRef.current = false;
-      resetLocalDispatch();
-    };
-
-    await api.orchestration
-      .dispatchCommand({
-        type: "thread.create",
-        commandId: newCommandId(),
-        threadId: nextThreadId,
-        projectId: activeProject.id,
-        title: nextThreadTitle,
-        modelSelection: nextThreadModelSelection,
-        runtimeMode,
-        interactionMode: "design",
-        branch: activeThreadBranch,
-        worktreePath: activeThread.worktreePath,
-        createdAt,
-      })
-      .then(() => {
-        return api.orchestration.dispatchCommand({
-          type: "thread.turn.start",
-          commandId: newCommandId(),
-          threadId: nextThreadId,
-          message: {
-            messageId: newMessageId(),
-            role: "user",
-            text: outgoingImplementationPrompt,
-            attachments: [],
-          },
-          modelSelection: ctxSelectedModelSelection,
-          titleSeed: nextThreadTitle,
-          runtimeMode,
-          interactionMode: "design",
-          sourceProposedPlan: {
-            threadId: activeThread.id,
-            planId: activeProposedPlan.id,
-          },
-          createdAt,
-        });
-      })
-      .then(() => {
-        return waitForStartedServerThread(scopeThreadRef(activeThread.environmentId, nextThreadId));
-      })
-      .then(() => {
-        return navigate({
-          to: "/$environmentId/$threadId",
-          params: {
-            environmentId: activeThread.environmentId,
-            threadId: nextThreadId,
-          },
-        });
-      })
-      .catch(async (err: unknown) => {
-        await api.orchestration
-          .dispatchCommand({
-            type: "thread.delete",
-            commandId: newCommandId(),
-            threadId: nextThreadId,
-          })
-          .catch(() => undefined);
-        toastManager.add({
-          type: "error",
-          title: "Could not start implementation thread",
-          description:
-            err instanceof Error ? err.message : "An error occurred while creating the new thread.",
-        });
-      })
-      .then(finish, finish);
-  }, [
-    activeProject,
-    activeProposedPlan,
-    activeThreadBranch,
-    activeThread,
-    beginLocalDispatch,
-    isConnecting,
-    isSendBusy,
-    isServerThread,
-    navigate,
-    resetLocalDispatch,
-    runtimeMode,
-    environmentId,
-  ]);
 
   const onProviderModelSelect = useCallback(
     (provider: ProviderKind, model: string) => {
@@ -2059,27 +1693,11 @@ export default function ChatView(props: ChatViewProps) {
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden bg-background">
-      {/* Minimal top bar — just the drag region + thread title */}
-      <header
-        className={cn(
-          "border-b border-border/60 px-3 sm:px-5",
-          isElectron
-            ? "drag-region flex h-[52px] items-center wco:h-[env(titlebar-area-height)] wco:pr-[calc(100vw-env(titlebar-area-width)-env(titlebar-area-x)+1em)]"
-            : "py-2 sm:py-3",
-        )}
-      >
-        <div className="flex min-w-0 flex-1 items-center gap-2">
-          <span className="inline-flex size-2 rounded-full bg-pink-400/80 shadow-[0_0_8px_1px_rgba(244,114,182,0.3)]" />
-          <span className="truncate text-sm font-medium text-foreground/90">
-            {activeThread.title || "New design"}
-          </span>
-          {activeProject?.name ? (
-            <span className="hidden truncate text-xs text-muted-foreground/50 sm:inline">
-              · {activeProject.name}
-            </span>
-          ) : null}
-        </div>
-      </header>
+      <AppTopBar
+        title={activeThread.title || "New design"}
+        subtitle={activeProject?.name ?? undefined}
+        statusTone={isWorking ? "brand" : "brand-alt"}
+      />
 
       {/* Error banner */}
       <ProviderStatusBanner status={activeProviderStatus} />
@@ -2090,7 +1708,14 @@ export default function ChatView(props: ChatViewProps) {
       {/* Main content area — chat on left, design preview always on right */}
       <div className="flex min-h-0 min-w-0 flex-1">
         {/* Chat column */}
-        <div className="flex min-h-0 min-w-0 flex-[0_0_40%] flex-col border-r border-border/60 md:flex-[0_0_38%] xl:flex-[0_0_35%]">
+        <div
+          className={cn(
+            "flex min-h-0 min-w-[360px] flex-col",
+            shouldShowDesignSidebar
+              ? "flex-[0_0_40%] border-r border-border md:flex-[0_0_38%] xl:flex-[0_0_34%]"
+              : "flex-1",
+          )}
+        >
           {/* Messages Wrapper */}
           <div className="relative flex min-h-0 flex-1 flex-col">
             {/* Messages — LegendList handles virtualization and scrolling internally */}
@@ -2118,6 +1743,10 @@ export default function ChatView(props: ChatViewProps) {
               workspaceRoot={activeWorkspaceRoot}
               onIsAtEndChange={onIsAtEndChange}
               onSubmitDesignAnswers={onSubmitDesignAnswers}
+              onPickStarter={(prompt) => {
+                setComposerDraftPrompt(composerDraftTarget, prompt);
+                scheduleComposerFocus();
+              }}
             />
 
             {/* scroll to bottom pill — shown when user has scrolled away from the bottom */}
@@ -2162,10 +1791,7 @@ export default function ChatView(props: ChatViewProps) {
               activePendingDraftAnswers={activePendingDraftAnswers}
               activePendingQuestionIndex={activePendingQuestionIndex}
               respondingRequestIds={respondingRequestIds}
-              showPlanFollowUpPrompt={showPlanFollowUpPrompt}
-              activeProposedPlan={activeProposedPlan}
               activePlan={activePlan as { turnId?: TurnId } | null}
-              sidebarProposedPlan={sidebarProposedPlan as { turnId?: TurnId } | null}
               lockedProvider={lockedProvider}
               providerStatuses={providerStatuses as ServerProvider[]}
               activeProjectDefaultModelSelection={activeProject?.defaultModelSelection}
@@ -2183,7 +1809,6 @@ export default function ChatView(props: ChatViewProps) {
               scheduleStickToBottom={scrollToEnd}
               onSend={onSend}
               onInterrupt={onInterrupt}
-              onImplementPlanInNewThread={onImplementPlanInNewThread}
               onRespondToApproval={onRespondToApproval}
               onSelectActivePendingUserInputOption={onSelectActivePendingUserInputOption}
               onAdvanceActivePendingUserInput={onAdvanceActivePendingUserInput}
@@ -2210,7 +1835,6 @@ export default function ChatView(props: ChatViewProps) {
               threadId={activeThread.id}
               workspaceRoot={activeWorkspaceRoot}
               mode="pane"
-              onClose={closeDesignSidebar}
             />
           </div>
         ) : null}

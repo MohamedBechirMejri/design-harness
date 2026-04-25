@@ -1,8 +1,5 @@
 import {
-  CURSOR_REASONING_OPTIONS,
   DEFAULT_MODEL_BY_PROVIDER,
-  type CursorModelOptions,
-  type CursorReasoningOption,
   ClaudeAgentEffort,
   CodexReasoningEffort,
   type EnvironmentId,
@@ -16,7 +13,7 @@ import {
   type ScopedProjectRef,
   type ScopedThreadRef,
   ThreadId,
-} from "@t3tools/contracts";
+} from "@dh/contracts";
 import {
   parseScopedProjectKey,
   parseScopedThreadKey,
@@ -24,11 +21,11 @@ import {
   scopeProjectRef,
   scopedThreadKey,
   scopeThreadRef,
-} from "@t3tools/client-runtime";
+} from "@dh/client-runtime";
 import * as Schema from "effect/Schema";
 import * as Equal from "effect/Equal";
 import { DeepMutable } from "effect/Types";
-import { createModelSelection, normalizeModelSlug } from "@t3tools/shared/model";
+import { createModelSelection, normalizeModelSlug } from "@dh/shared/model";
 import { useMemo } from "react";
 import { getLocalStorageItem } from "./hooks/useLocalStorage";
 import { resolveAppModelSelection } from "./modelSelection";
@@ -43,9 +40,9 @@ import { createJSONStorage, persist } from "zustand/middleware";
 import { useShallow } from "zustand/react/shallow";
 import { createDebouncedStorage, createMemoryStorage } from "./lib/storage";
 import { getDefaultServerModel } from "./providerModels";
-import { UnifiedSettings } from "@t3tools/contracts/settings";
+import { UnifiedSettings } from "@dh/contracts/settings";
 
-export const COMPOSER_DRAFT_STORAGE_KEY = "t3code:composer-drafts:v1";
+export const COMPOSER_DRAFT_STORAGE_KEY = "dh:composer-drafts:v1";
 const COMPOSER_DRAFT_STORAGE_VERSION = 5;
 const DraftThreadEnvModeSchema = Schema.Literals(["local", "worktree"]);
 const isRuntimeMode = Schema.is(RuntimeMode);
@@ -531,9 +528,7 @@ function shouldRemoveDraft(draft: ComposerThreadDraftState): boolean {
 }
 
 function normalizeProviderKind(value: unknown): ProviderKind | null {
-  return value === "codex" || value === "claudeAgent" || value === "cursor" || value === "opencode"
-    ? value
-    : null;
+  return value === "codex" || value === "claudeAgent" ? value : null;
 }
 
 function normalizeProviderModelOptions(
@@ -549,14 +544,6 @@ function normalizeProviderModelOptions(
   const claudeCandidate =
     candidate?.claudeAgent && typeof candidate.claudeAgent === "object"
       ? (candidate.claudeAgent as Record<string, unknown>)
-      : null;
-  const cursorCandidate =
-    candidate?.cursor && typeof candidate.cursor === "object"
-      ? (candidate.cursor as Record<string, unknown>)
-      : null;
-  const openCodeCandidate =
-    candidate?.opencode && typeof candidate.opencode === "object"
-      ? (candidate.opencode as Record<string, unknown>)
       : null;
 
   const isCodexReasoningEffort = Schema.is(CodexReasoningEffort);
@@ -618,66 +605,12 @@ function normalizeProviderModelOptions(
         }
       : undefined;
 
-  const cursorReasoningRaw = cursorCandidate?.reasoning;
-  const cursorReasoning: CursorReasoningOption | undefined =
-    typeof cursorReasoningRaw === "string" &&
-    (CURSOR_REASONING_OPTIONS as readonly string[]).includes(cursorReasoningRaw)
-      ? (cursorReasoningRaw as CursorReasoningOption)
-      : undefined;
-  const cursorFastMode =
-    cursorCandidate?.fastMode === true
-      ? true
-      : cursorCandidate?.fastMode === false
-        ? false
-        : undefined;
-  const cursorThinking =
-    cursorCandidate?.thinking === true
-      ? true
-      : cursorCandidate?.thinking === false
-        ? false
-        : undefined;
-  const cursorContextWindow =
-    typeof cursorCandidate?.contextWindow === "string" && cursorCandidate.contextWindow.length > 0
-      ? cursorCandidate.contextWindow
-      : undefined;
-
-  const cursor: CursorModelOptions | undefined =
-    cursorCandidate !== null
-      ? (() => {
-          const nextCursor = {
-            ...(cursorReasoning ? { reasoning: cursorReasoning } : {}),
-            ...(cursorFastMode !== undefined ? { fastMode: cursorFastMode } : {}),
-            ...(cursorThinking !== undefined ? { thinking: cursorThinking } : {}),
-            ...(cursorContextWindow !== undefined ? { contextWindow: cursorContextWindow } : {}),
-          } satisfies CursorModelOptions;
-          return Object.keys(nextCursor).length > 0 ? nextCursor : undefined;
-        })()
-      : undefined;
-
-  const openCodeVariant =
-    typeof openCodeCandidate?.variant === "string" && openCodeCandidate.variant.length > 0
-      ? openCodeCandidate.variant
-      : undefined;
-  const openCodeAgent =
-    typeof openCodeCandidate?.agent === "string" && openCodeCandidate.agent.length > 0
-      ? openCodeCandidate.agent
-      : undefined;
-  const opencode =
-    openCodeVariant !== undefined || openCodeAgent !== undefined
-      ? {
-          ...(openCodeVariant !== undefined ? { variant: openCodeVariant } : {}),
-          ...(openCodeAgent !== undefined ? { agent: openCodeAgent } : {}),
-        }
-      : undefined;
-
-  if (!codex && !claude && cursor === undefined && !opencode) {
+  if (!codex && !claude) {
     return null;
   }
   return {
     ...(codex ? { codex } : {}),
     ...(claude ? { claudeAgent: claude } : {}),
-    ...(cursor !== undefined ? { cursor } : {}),
-    ...(opencode ? { opencode } : {}),
   };
 }
 
@@ -766,7 +699,7 @@ function legacyToModelSelectionByProvider(
   const result: Partial<Record<ProviderKind, ModelSelection>> = {};
   // Add entries from the options bag (for non-active providers)
   if (modelOptions) {
-    for (const provider of ["codex", "claudeAgent", "cursor", "opencode"] as const) {
+    for (const provider of ["codex", "claudeAgent"] as const) {
       const options = modelOptions[provider];
       if (options && Object.keys(options).length > 0) {
         result[provider] = createModelSelection(
@@ -1270,7 +1203,6 @@ function normalizePersistedDraftThreads(
           ? candidateDraftThread.runtimeMode
           : DEFAULT_RUNTIME_MODE,
         interactionMode:
-          candidateDraftThread.interactionMode === "plan" ||
           candidateDraftThread.interactionMode === "default" ||
           candidateDraftThread.interactionMode === "design"
             ? candidateDraftThread.interactionMode
@@ -1392,9 +1324,7 @@ function normalizePersistedDraftsByThreadId(
       ? draftCandidate.runtimeMode
       : null;
     const interactionMode =
-      draftCandidate.interactionMode === "plan" ||
-      draftCandidate.interactionMode === "default" ||
-      draftCandidate.interactionMode === "design"
+      draftCandidate.interactionMode === "default" || draftCandidate.interactionMode === "design"
         ? draftCandidate.interactionMode
         : null;
     const prompt = ensureInlineTerminalContextPlaceholders(
@@ -2315,7 +2245,7 @@ const composerDraftStore = create<ComposerDraftStoreState>()(
             }
             const base = existing ?? createEmptyThreadDraft();
             const nextMap = { ...base.modelSelectionByProvider };
-            for (const provider of ["codex", "claudeAgent", "cursor", "opencode"] as const) {
+            for (const provider of ["codex", "claudeAgent"] as const) {
               // Only touch providers explicitly present in the input
               if (!normalizedOpts || !(provider in normalizedOpts)) continue;
               const opts = normalizedOpts[provider];
@@ -2471,11 +2401,7 @@ const composerDraftStore = create<ComposerDraftStoreState>()(
             return;
           }
           const nextInteractionMode =
-            interactionMode === "plan" ||
-            interactionMode === "default" ||
-            interactionMode === "design"
-              ? interactionMode
-              : null;
+            interactionMode === "default" || interactionMode === "design" ? interactionMode : null;
           set((state) => {
             const existing = state.draftsByThreadKey[threadKey];
             if (!existing && nextInteractionMode === null) {

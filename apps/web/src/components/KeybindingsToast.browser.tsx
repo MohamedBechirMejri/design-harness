@@ -11,7 +11,7 @@ import {
   type ServerLifecycleWelcomePayload,
   type ThreadId,
   WS_METHODS,
-} from "@t3tools/contracts";
+} from "@dh/contracts";
 import { RouterProvider, createMemoryHistory } from "@tanstack/react-router";
 import { ws, http, HttpResponse } from "msw";
 import { setupWorker } from "msw/browser";
@@ -67,7 +67,7 @@ function createBaseServerConfig(): ServerConfig {
       sessionCookieName: "t3_session",
     },
     cwd: "/repo/project",
-    keybindingsConfigPath: "/repo/project/.t3code-keybindings.json",
+    keybindingsConfigPath: "/repo/project/.dh-keybindings.json",
     keybindings: [],
     issues: [],
     providers: [
@@ -81,7 +81,6 @@ function createBaseServerConfig(): ServerConfig {
         checkedAt: NOW_ISO,
         models: [],
         slashCommands: [],
-        skills: [],
       },
     ],
     availableEditors: [],
@@ -95,18 +94,9 @@ function createBaseServerConfig(): ServerConfig {
       ...DEFAULT_SERVER_SETTINGS,
       enableAssistantStreaming: false,
       defaultThreadEnvMode: "local" as const,
-      textGenerationModelSelection: { provider: "codex" as const, model: "gpt-5.4-mini" },
       providers: {
         codex: { enabled: true, binaryPath: "", homePath: "", customModels: [] },
         claudeAgent: { enabled: true, binaryPath: "", customModels: [], launchArgs: "" },
-        cursor: { enabled: true, binaryPath: "", apiEndpoint: "", customModels: [] },
-        opencode: {
-          enabled: true,
-          binaryPath: "",
-          serverUrl: "",
-          serverPassword: "",
-          customModels: [],
-        },
       },
     },
   };

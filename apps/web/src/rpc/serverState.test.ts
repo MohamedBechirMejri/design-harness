@@ -7,7 +7,7 @@ import {
   type ServerConfigStreamEvent,
   type ServerLifecycleStreamEvent,
   type ServerProvider,
-} from "@t3tools/contracts";
+} from "@dh/contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -49,7 +49,6 @@ const defaultProviders: ReadonlyArray<ServerProvider> = [
     checkedAt: "2026-01-01T00:00:00.000Z",
     models: [],
     slashCommands: [],
-    skills: [],
   },
 ];
 
@@ -72,7 +71,7 @@ const baseServerConfig: ServerConfig = {
     policy: "loopback-browser",
     bootstrapMethods: ["one-time-token"],
     sessionMethods: ["browser-session-cookie", "bearer-session-token"],
-    sessionCookieName: "t3_session",
+    sessionCookieName: "dh_session",
   },
   cwd: "/tmp/workspace",
   keybindingsConfigPath: "/tmp/workspace/.config/keybindings.json",

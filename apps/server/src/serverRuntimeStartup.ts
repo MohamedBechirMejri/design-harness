@@ -5,7 +5,7 @@ import {
   type ModelSelection,
   ProjectId,
   ThreadId,
-} from "@t3tools/contracts";
+} from "@dh/contracts";
 import {
   Data,
   Deferred,
@@ -248,11 +248,7 @@ const resolveStartupBrowserTarget = Effect.gen(function* () {
       ? `http://${formatHostForUrl(serverConfig.host)}:${serverConfig.port}`
       : localUrl;
   const baseTarget = serverConfig.devUrl?.toString() ?? bindUrl;
-  return yield* Effect.succeed(serverConfig.mode === "desktop" ? baseTarget : undefined).pipe(
-    Effect.flatMap((target) =>
-      target ? Effect.succeed(target) : serverAuth.issueStartupPairingUrl(baseTarget),
-    ),
-  );
+  return yield* serverAuth.issueStartupPairingUrl(baseTarget);
 });
 
 const maybeOpenBrowser = (target: string) =>
@@ -440,11 +436,9 @@ export const makeServerRuntimeStartup = Effect.gen(function* () {
       } else {
         yield* Effect.logDebug("startup phase: browser open check");
         const startupBrowserTarget = yield* resolveStartupBrowserTarget;
-        if (serverConfig.mode !== "desktop") {
-          yield* Effect.logInfo(
-            "Authentication required. Open T3 Code using the pairing URL.",
-          ).pipe(Effect.annotateLogs({ pairingUrl: startupBrowserTarget }));
-        }
+        yield* Effect.logInfo(
+          "Authentication required. Open Design Harness using the pairing URL.",
+        ).pipe(Effect.annotateLogs({ pairingUrl: startupBrowserTarget }));
         yield* runStartupPhase("browser.open", maybeOpenBrowser(startupBrowserTarget));
       }
       yield* Effect.logDebug("startup phase: complete");

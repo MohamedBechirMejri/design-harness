@@ -6,7 +6,7 @@ type ThemeSnapshot = {
   systemDark: boolean;
 };
 
-const STORAGE_KEY = "t3code:theme";
+const STORAGE_KEY = "dh:theme";
 const MEDIA_QUERY = "(prefers-color-scheme: dark)";
 const DEFAULT_THEME_SNAPSHOT: ThemeSnapshot = {
   theme: "system",
@@ -17,7 +17,6 @@ const DYNAMIC_THEME_COLOR_SELECTOR = `meta[name="${THEME_COLOR_META_NAME}"][data
 
 let listeners: Array<() => void> = [];
 let lastSnapshot: ThemeSnapshot | null = null;
-let lastDesktopTheme: Theme | null = null;
 
 function emitChange() {
   for (const listener of listeners) listener();
@@ -95,7 +94,6 @@ function applyTheme(theme: Theme, suppressTransitions = false) {
   const isDark = theme === "dark" || (theme === "system" && getSystemDark());
   document.documentElement.classList.toggle("dark", isDark);
   syncBrowserChromeTheme();
-  syncDesktopTheme(theme);
   if (suppressTransitions) {
     // Force a reflow so the no-transitions class takes effect before removal
     // oxlint-disable-next-line no-unused-expressions
@@ -104,21 +102,6 @@ function applyTheme(theme: Theme, suppressTransitions = false) {
       document.documentElement.classList.remove("no-transitions");
     });
   }
-}
-
-function syncDesktopTheme(theme: Theme) {
-  if (typeof window === "undefined") return;
-  const bridge = window.desktopBridge;
-  if (!bridge || lastDesktopTheme === theme) {
-    return;
-  }
-
-  lastDesktopTheme = theme;
-  void bridge.setTheme(theme).catch(() => {
-    if (lastDesktopTheme === theme) {
-      lastDesktopTheme = null;
-    }
-  });
 }
 
 // Apply immediately on module load to prevent flash

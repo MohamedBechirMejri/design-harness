@@ -7,7 +7,7 @@ import {
   ThreadId,
   TurnId,
   type OrchestrationEvent,
-} from "@t3tools/contracts";
+} from "@dh/contracts";
 import { Effect, Layer, ManagedRuntime, Metric, Option, Queue, Stream } from "effect";
 import { describe, expect, it } from "vitest";
 
@@ -472,7 +472,7 @@ describe("OrchestrationEngine", () => {
 
     const snapshots = await system.run(Metric.snapshot);
     expect(
-      hasMetricSnapshot(snapshots, "t3_orchestration_command_ack_duration", {
+      hasMetricSnapshot(snapshots, "dh_orchestration_command_ack_duration", {
         commandType: "thread.create",
         aggregateKind: "thread",
         ackEventType: "thread.created",
@@ -510,7 +510,7 @@ describe("OrchestrationEngine", () => {
 
     const snapshots = await system.run(Metric.snapshot);
     expect(
-      hasMetricSnapshot(snapshots, "t3_orchestration_commands_total", {
+      hasMetricSnapshot(snapshots, "dh_orchestration_commands_total", {
         commandType: "thread.create",
         aggregateKind: "thread",
         outcome: "failure",

@@ -5,7 +5,6 @@ import {
   EventId,
   ORCHESTRATION_WS_METHODS,
   EnvironmentId,
-  type EnvironmentApi,
   type MessageId,
   type OrchestrationReadModel,
   type ProjectId,
@@ -16,8 +15,8 @@ import {
   WS_METHODS,
   OrchestrationSessionStatus,
   DEFAULT_SERVER_SETTINGS,
-} from "@t3tools/contracts";
-import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime";
+} from "@dh/contracts";
+import { scopedThreadKey, scopeThreadRef } from "@dh/client-runtime";
 import { RouterProvider, createMemoryHistory } from "@tanstack/react-router";
 import { HttpResponse, http, ws } from "msw";
 import { setupWorker } from "msw/browser";
@@ -27,16 +26,7 @@ import { render } from "vitest-browser-react";
 
 import { useCommandPaletteStore } from "../commandPaletteStore";
 import { useComposerDraftStore, DraftId } from "../composerDraftStore";
-import {
-  __resetEnvironmentApiOverridesForTests,
-  __setEnvironmentApiOverrideForTests,
-} from "../environmentApi";
-import {
-  resetSavedEnvironmentRegistryStoreForTests,
-  resetSavedEnvironmentRuntimeStoreForTests,
-  useSavedEnvironmentRegistryStore,
-  useSavedEnvironmentRuntimeStore,
-} from "../environments/runtime";
+import { __resetEnvironmentApiOverridesForTests } from "../environmentApi";
 import {
   INLINE_TERMINAL_CONTEXT_PLACEHOLDER,
   removeInlineTerminalContextPlaceholder,
@@ -53,7 +43,7 @@ import { useUiStateStore } from "../uiStateStore";
 import { createAuthenticatedSessionHandlers } from "../../test/authHttpHandlers";
 import { BrowserWsRpcHarness, type NormalizedWsRpcRequestBody } from "../../test/wsRpcHarness";
 
-import { DEFAULT_CLIENT_SETTINGS } from "@t3tools/contracts/settings";
+import { DEFAULT_CLIENT_SETTINGS } from "@dh/contracts/settings";
 
 vi.mock("../lib/gitStatusState", () => ({
   useGitStatus: () => ({ data: null, error: null, cause: null, isPending: false }),
@@ -68,7 +58,6 @@ const ARCHIVED_SECONDARY_THREAD_ID = "thread-secondary-project-archived" as Thre
 const PROJECT_ID = "project-1" as ProjectId;
 const SECOND_PROJECT_ID = "project-2" as ProjectId;
 const LOCAL_ENVIRONMENT_ID = EnvironmentId.make("environment-local");
-const REMOTE_ENVIRONMENT_ID = EnvironmentId.make("environment-remote");
 const THREAD_REF = scopeThreadRef(LOCAL_ENVIRONMENT_ID, THREAD_ID);
 const THREAD_KEY = scopedThreadKey(THREAD_REF);
 const UUID_ROUTE_RE = /^\/draft\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
@@ -160,7 +149,7 @@ function createBaseServerConfig(): ServerConfig {
       sessionCookieName: "t3_session",
     },
     cwd: "/repo/project",
-    keybindingsConfigPath: "/repo/project/.t3code-keybindings.json",
+    keybindingsConfigPath: "/repo/project/.dh-keybindings.json",
     keybindings: [],
     issues: [],
     providers: [
@@ -174,7 +163,6 @@ function createBaseServerConfig(): ServerConfig {
         checkedAt: NOW_ISO,
         models: [],
         slashCommands: [],
-        skills: [],
       },
     ],
     availableEditors: [],
@@ -187,32 +175,6 @@ function createBaseServerConfig(): ServerConfig {
     settings: {
       ...DEFAULT_SERVER_SETTINGS,
       ...DEFAULT_CLIENT_SETTINGS,
-    },
-  };
-}
-
-function createMockEnvironmentApi(input: {
-  browse: EnvironmentApi["filesystem"]["browse"];
-  dispatchCommand: EnvironmentApi["orchestration"]["dispatchCommand"];
-}): EnvironmentApi {
-  return {
-    projects: {} as EnvironmentApi["projects"],
-    filesystem: {
-      browse: input.browse,
-    },
-    designPreview: {} as EnvironmentApi["designPreview"],
-    git: {} as EnvironmentApi["git"],
-    orchestration: {
-      dispatchCommand: input.dispatchCommand,
-      getTurnDiff: (() => {
-        throw new Error("Not implemented in browser test.");
-      }) as EnvironmentApi["orchestration"]["getTurnDiff"],
-      getFullThreadDiff: (() => {
-        throw new Error("Not implemented in browser test.");
-      }) as EnvironmentApi["orchestration"]["getFullThreadDiff"],
-      subscribeShell: (() => () => undefined) as EnvironmentApi["orchestration"]["subscribeShell"],
-      subscribeThread: (() => () =>
-        undefined) as EnvironmentApi["orchestration"]["subscribeThread"],
     },
   };
 }
@@ -827,7 +789,6 @@ function createSnapshotWithPendingUserInput(): OrchestrationReadModel {
     threads: snapshot.threads.map((thread) =>
       thread.id === THREAD_ID
         ? Object.assign({}, thread, {
-            interactionMode: "plan",
             activities: [
               {
                 id: EventId.make("activity-user-input-requested"),
@@ -875,62 +836,6 @@ function createSnapshotWithPendingUserInput(): OrchestrationReadModel {
               },
             ],
             updatedAt: isoAt(1_000),
-          })
-        : thread,
-    ),
-  };
-}
-
-function createSnapshotWithPlanFollowUpPrompt(options?: {
-  modelSelection?: { provider: "codex"; model: string };
-  planMarkdown?: string;
-}): OrchestrationReadModel {
-  const snapshot = createSnapshotForTargetUser({
-    targetMessageId: "msg-user-plan-follow-up-target" as MessageId,
-    targetText: "plan follow-up thread",
-  });
-  const modelSelection = options?.modelSelection ?? {
-    provider: "codex" as const,
-    model: "gpt-5",
-  };
-  const planMarkdown =
-    options?.planMarkdown ?? "# Follow-up plan\n\n- Keep the composer footer stable on resize.";
-
-  return {
-    ...snapshot,
-    projects: snapshot.projects.map((project) =>
-      project.id === PROJECT_ID ? { ...project, defaultModelSelection: modelSelection } : project,
-    ),
-    threads: snapshot.threads.map((thread) =>
-      thread.id === THREAD_ID
-        ? Object.assign({}, thread, {
-            modelSelection,
-            interactionMode: "plan",
-            latestTurn: {
-              turnId: "turn-plan-follow-up" as TurnId,
-              state: "completed",
-              requestedAt: isoAt(1_000),
-              startedAt: isoAt(1_001),
-              completedAt: isoAt(1_010),
-              assistantMessageId: null,
-            },
-            proposedPlans: [
-              {
-                id: "plan-follow-up-browser-test",
-                turnId: "turn-plan-follow-up" as TurnId,
-                planMarkdown,
-                implementedAt: null,
-                implementationThreadId: null,
-                createdAt: isoAt(1_002),
-                updatedAt: isoAt(1_003),
-              },
-            ],
-            session: {
-              ...thread.session,
-              status: "ready",
-              updatedAt: isoAt(1_010),
-            },
-            updatedAt: isoAt(1_010),
           })
         : thread,
     ),
@@ -1601,8 +1506,6 @@ describe("ChatView timeline estimator parity (full app)", () => {
     wsRequests.length = 0;
     customWsRpcResolver = null;
     __resetEnvironmentApiOverridesForTests();
-    resetSavedEnvironmentRegistryStoreForTests();
-    resetSavedEnvironmentRuntimeStoreForTests();
     Reflect.deleteProperty(window, "desktopBridge");
     useComposerDraftStore.setState({
       draftsByThreadKey: {},
@@ -3842,228 +3745,6 @@ describe("ChatView timeline estimator parity (full app)", () => {
     }
   });
 
-  it("selects an environment before browsing when multiple environments are available", async () => {
-    const remoteBrowseMock = vi.fn(async ({ partialPath }: { partialPath: string }) => {
-      if (partialPath === "~/workspaces/") {
-        return {
-          parentPath: "~/workspaces/",
-          entries: [{ name: "codething", fullPath: "~/workspaces/codething" }],
-        };
-      }
-
-      return {
-        parentPath: "~/",
-        entries: [{ name: "workspaces", fullPath: "~/workspaces" }],
-      };
-    });
-    const remoteDispatchMock = vi.fn(async () => ({
-      sequence: fixture.snapshot.snapshotSequence + 1,
-    }));
-
-    __setEnvironmentApiOverrideForTests(
-      REMOTE_ENVIRONMENT_ID,
-      createMockEnvironmentApi({
-        browse: remoteBrowseMock,
-        dispatchCommand: remoteDispatchMock,
-      }),
-    );
-
-    const mounted = await mountChatView({
-      viewport: DEFAULT_VIEWPORT,
-      snapshot: createSnapshotForTargetUser({
-        targetMessageId: "msg-user-command-palette-add-project-multi-env" as MessageId,
-        targetText: "command palette add project multi env",
-      }),
-    });
-
-    try {
-      await waitForServerConfigToApply();
-      useSavedEnvironmentRegistryStore.getState().upsert({
-        environmentId: REMOTE_ENVIRONMENT_ID,
-        label: "Staging",
-        httpBaseUrl: "https://staging.example.test",
-        wsBaseUrl: "wss://staging.example.test/ws",
-        createdAt: NOW_ISO,
-        lastConnectedAt: NOW_ISO,
-      });
-      useSavedEnvironmentRuntimeStore.getState().patch(REMOTE_ENVIRONMENT_ID, {
-        connectionState: "connected",
-        authState: "authenticated",
-        descriptor: {
-          ...fixture.serverConfig.environment,
-          environmentId: REMOTE_ENVIRONMENT_ID,
-          label: "Staging",
-        },
-        serverConfig: {
-          ...fixture.serverConfig,
-          environment: {
-            ...fixture.serverConfig.environment,
-            environmentId: REMOTE_ENVIRONMENT_ID,
-            label: "Staging",
-          },
-          settings: {
-            ...fixture.serverConfig.settings,
-            addProjectBaseDirectory: "~/workspaces",
-          },
-        },
-        connectedAt: NOW_ISO,
-      });
-
-      const palette = page.getByTestId("command-palette");
-      await openCommandPaletteFromTrigger();
-
-      await expect.element(palette).toBeInTheDocument();
-      await palette.getByText("Add project", { exact: true }).click();
-      await expect.element(palette.getByText("Environments", { exact: true })).toBeInTheDocument();
-      await expect
-        .element(palette.getByText("This device", { exact: true }).first())
-        .toBeInTheDocument();
-      await palette.getByText("Staging", { exact: true }).click();
-
-      const browseInput = await waitForCommandPaletteInput(ADD_PROJECT_SUBMENU_PLACEHOLDER);
-      await expect.element(browseInput).toHaveValue("~/workspaces/");
-
-      await vi.waitFor(
-        () => {
-          expect(remoteBrowseMock).toHaveBeenCalledWith({ partialPath: "~/workspaces/" });
-        },
-        { timeout: 8_000, interval: 16 },
-      );
-
-      await page.getByPlaceholder(ADD_PROJECT_SUBMENU_PLACEHOLDER).fill("~/workspaces/");
-      await vi.waitFor(
-        () => {
-          expect(remoteBrowseMock).toHaveBeenCalledWith({ partialPath: "~/workspaces/" });
-        },
-        { timeout: 8_000, interval: 16 },
-      );
-      await expect.element(palette.getByText("codething", { exact: true })).toBeInTheDocument();
-      await expect
-        .element(palette.getByRole("button", { name: "Add (Enter)" }))
-        .toBeInTheDocument();
-
-      await dispatchInputKey(browseInput, { key: "Enter" });
-
-      await vi.waitFor(
-        () => {
-          expect(remoteDispatchMock).toHaveBeenCalledWith(
-            expect.objectContaining({
-              type: "project.create",
-              workspaceRoot: "~/workspaces",
-              title: "workspaces",
-            }),
-          );
-        },
-        { timeout: 8_000, interval: 16 },
-      );
-
-      await waitForURL(
-        mounted.router,
-        (path) => UUID_ROUTE_RE.test(path),
-        "Route should have changed to a new draft thread after adding a remote project.",
-      );
-    } finally {
-      await mounted.cleanup();
-    }
-  });
-
-  it("picks a local project from the native file manager", async () => {
-    const pickFolder = vi.fn().mockResolvedValue("/Users/julius/Projects/finder-picked");
-
-    const mounted = await mountChatView({
-      viewport: DEFAULT_VIEWPORT,
-      snapshot: createSnapshotForTargetUser({
-        targetMessageId: "msg-user-command-palette-add-project-file-manager" as MessageId,
-        targetText: "command palette add project file manager",
-      }),
-      resolveRpc: (body) => {
-        if (body._tag === WS_METHODS.filesystemBrowse) {
-          if (body.partialPath === "~/Applications/") {
-            return {
-              parentPath: "~/Applications/",
-              entries: [{ name: "Utilities", fullPath: "~/Applications/Utilities" }],
-            };
-          }
-
-          return {
-            parentPath: "~/",
-            entries: [{ name: "Applications", fullPath: "~/Applications" }],
-          };
-        }
-
-        if (body._tag === ORCHESTRATION_WS_METHODS.dispatchCommand) {
-          return {
-            sequence: fixture.snapshot.snapshotSequence + 1,
-          };
-        }
-
-        return undefined;
-      },
-    });
-
-    try {
-      await waitForServerConfigToApply();
-      window.desktopBridge = {
-        pickFolder,
-        setTheme: vi.fn().mockResolvedValue(undefined),
-      } as unknown as NonNullable<typeof window.desktopBridge>;
-
-      await page.getByTestId("sidebar-add-project-trigger").click();
-
-      const palette = page.getByTestId("command-palette");
-      await expect.element(palette).toBeInTheDocument();
-      const browseInput = palette.getByPlaceholder(ADD_PROJECT_SUBMENU_PLACEHOLDER);
-      await browseInput.fill("~/Applications/access");
-
-      const fileManagerLabel = isMacPlatform(navigator.platform)
-        ? "Open in Finder"
-        : navigator.platform.toLowerCase().startsWith("win")
-          ? "Open in Explorer"
-          : "Open in Files";
-      await palette.getByRole("button", { name: fileManagerLabel }).click();
-
-      await vi.waitFor(
-        () => {
-          expect(pickFolder).toHaveBeenCalledWith({ initialPath: "~/Applications" });
-        },
-        { timeout: 8_000, interval: 16 },
-      );
-
-      await vi.waitFor(
-        () => {
-          const dispatchRequest = wsRequests.find(
-            (request) =>
-              request._tag === ORCHESTRATION_WS_METHODS.dispatchCommand &&
-              request.type === "project.create",
-          ) as
-            | {
-                _tag: string;
-                type?: string;
-                workspaceRoot?: string;
-                title?: string;
-              }
-            | undefined;
-
-          expect(dispatchRequest).toMatchObject({
-            _tag: ORCHESTRATION_WS_METHODS.dispatchCommand,
-            type: "project.create",
-            workspaceRoot: "/Users/julius/Projects/finder-picked",
-            title: "finder-picked",
-          });
-        },
-        { timeout: 8_000, interval: 16 },
-      );
-
-      await waitForURL(
-        mounted.router,
-        (path) => UUID_ROUTE_RE.test(path),
-        "Route should have changed to a new draft thread after adding a project from the native file manager.",
-      );
-    } finally {
-      await mounted.cleanup();
-    }
-  });
-
   it("adds a project from browse mode with Mod+Enter when a directory is highlighted", async () => {
     const mounted = await mountChatView({
       viewport: DEFAULT_VIEWPORT,
@@ -4633,136 +4314,6 @@ describe("ChatView timeline estimator parity (full app)", () => {
     }
   });
 
-  it("keeps plan follow-up footer actions fused and aligned after a real resize", async () => {
-    const mounted = await mountChatView({
-      viewport: WIDE_FOOTER_VIEWPORT,
-      snapshot: createSnapshotWithPlanFollowUpPrompt(),
-    });
-
-    try {
-      const footer = await waitForElement(
-        () => document.querySelector<HTMLElement>('[data-chat-composer-footer="true"]'),
-        "Unable to find composer footer.",
-      );
-      const initialModelPicker = await waitForElement(
-        findComposerProviderModelPicker,
-        "Unable to find provider model picker.",
-      );
-      const initialModelPickerOffset =
-        initialModelPicker.getBoundingClientRect().left - footer.getBoundingClientRect().left;
-      const initialImplementButton = await waitForButtonByText("Implement");
-      const initialImplementWidth = initialImplementButton.getBoundingClientRect().width;
-
-      await waitForElement(
-        () =>
-          document.querySelector<HTMLButtonElement>('button[aria-label="Implementation actions"]'),
-        "Unable to find implementation actions trigger.",
-      );
-
-      await mounted.setContainerSize({
-        width: 440,
-        height: WIDE_FOOTER_VIEWPORT.height,
-      });
-      await expectComposerActionsContained();
-
-      const implementButton = await waitForButtonByText("Implement");
-      const implementActionsButton = await waitForElement(
-        () =>
-          document.querySelector<HTMLButtonElement>('button[aria-label="Implementation actions"]'),
-        "Unable to find implementation actions trigger.",
-      );
-
-      await vi.waitFor(
-        () => {
-          const implementRect = implementButton.getBoundingClientRect();
-          const implementActionsRect = implementActionsButton.getBoundingClientRect();
-          const compactModelPicker = findComposerProviderModelPicker();
-          expect(compactModelPicker).toBeTruthy();
-
-          const compactModelPickerOffset =
-            compactModelPicker!.getBoundingClientRect().left - footer.getBoundingClientRect().left;
-
-          expect(Math.abs(implementRect.right - implementActionsRect.left)).toBeLessThanOrEqual(1);
-          expect(Math.abs(implementRect.top - implementActionsRect.top)).toBeLessThanOrEqual(1);
-          expect(Math.abs(implementRect.width - initialImplementWidth)).toBeLessThanOrEqual(1);
-          expect(Math.abs(compactModelPickerOffset - initialModelPickerOffset)).toBeLessThanOrEqual(
-            1,
-          );
-        },
-        { timeout: 8_000, interval: 16 },
-      );
-    } finally {
-      await mounted.cleanup();
-    }
-  });
-
-  it("keeps the wide desktop follow-up layout expanded when the footer still fits", async () => {
-    const mounted = await mountChatView({
-      viewport: WIDE_FOOTER_VIEWPORT,
-      snapshot: createSnapshotWithPlanFollowUpPrompt({
-        modelSelection: { provider: "codex", model: "gpt-5.3-codex-spark" },
-        planMarkdown:
-          "# Imaginary Long-Range Plan: T3 Code Adaptive Orchestration and Safe-Delay Execution Initiative",
-      }),
-    });
-
-    try {
-      await waitForButtonByText("Implement");
-
-      await vi.waitFor(
-        () => {
-          const footer = document.querySelector<HTMLElement>('[data-chat-composer-footer="true"]');
-          const actions = document.querySelector<HTMLElement>(
-            '[data-chat-composer-actions="right"]',
-          );
-
-          expect(footer?.dataset.chatComposerFooterCompact).toBe("false");
-          expect(actions?.dataset.chatComposerPrimaryActionsCompact).toBe("false");
-        },
-        { timeout: 8_000, interval: 16 },
-      );
-    } finally {
-      await mounted.cleanup();
-    }
-  });
-
-  it("compacts the footer when a wide desktop follow-up layout starts overflowing", async () => {
-    const mounted = await mountChatView({
-      viewport: WIDE_FOOTER_VIEWPORT,
-      snapshot: createSnapshotWithPlanFollowUpPrompt({
-        modelSelection: { provider: "codex", model: "gpt-5.3-codex-spark" },
-        planMarkdown:
-          "# Imaginary Long-Range Plan: T3 Code Adaptive Orchestration and Safe-Delay Execution Initiative",
-      }),
-    });
-
-    try {
-      await waitForButtonByText("Implement");
-
-      await mounted.setContainerSize({
-        width: 804,
-        height: WIDE_FOOTER_VIEWPORT.height,
-      });
-
-      await expectComposerActionsContained();
-
-      await vi.waitFor(
-        () => {
-          const footer = document.querySelector<HTMLElement>('[data-chat-composer-footer="true"]');
-          const actions = document.querySelector<HTMLElement>(
-            '[data-chat-composer-actions="right"]',
-          );
-
-          expect(footer?.dataset.chatComposerFooterCompact).toBe("true");
-          expect(actions?.dataset.chatComposerPrimaryActionsCompact).toBe("true");
-        },
-        { timeout: 8_000, interval: 16 },
-      );
-    } finally {
-      await mounted.cleanup();
-    }
-  });
-
   it("keeps the slash-command menu visible above the composer", async () => {
     const mounted = await mountChatView({
       viewport: DEFAULT_VIEWPORT,
@@ -5001,57 +4552,6 @@ describe("ChatView timeline estimator parity (full app)", () => {
       });
     } finally {
       releaseModShortcut("Control");
-      await mounted.cleanup();
-    }
-  });
-
-  it("shows a tooltip with the skill description when hovering a skill pill", async () => {
-    const mounted = await mountChatView({
-      viewport: DEFAULT_VIEWPORT,
-      snapshot: createSnapshotForTargetUser({
-        targetMessageId: "msg-user-skill-tooltip-target" as MessageId,
-        targetText: "skill tooltip thread",
-      }),
-      configureFixture: (nextFixture) => {
-        const provider = nextFixture.serverConfig.providers[0];
-        if (!provider) {
-          throw new Error("Expected default provider in test fixture.");
-        }
-        (
-          provider as {
-            skills: ServerConfig["providers"][number]["skills"];
-          }
-        ).skills = [
-          {
-            name: "agent-browser",
-            displayName: "Agent Browser",
-            description: "Open pages, click around, and inspect web apps.",
-            path: "/Users/test/.agents/skills/agent-browser/SKILL.md",
-            enabled: true,
-          },
-        ];
-      },
-    });
-
-    try {
-      useComposerDraftStore.getState().setPrompt(THREAD_REF, "use the $agent-browser ");
-      await waitForComposerText("use the $agent-browser ");
-
-      await waitForElement(
-        () => document.querySelector<HTMLElement>('[data-composer-skill-chip="true"]'),
-        "Unable to find rendered composer skill chip.",
-      );
-      await page.getByText("Agent Browser").hover();
-
-      await vi.waitFor(
-        () => {
-          const tooltip = document.querySelector<HTMLElement>('[data-slot="tooltip-popup"]');
-          expect(tooltip).not.toBeNull();
-          expect(tooltip?.textContent).toContain("Open pages, click around, and inspect web apps.");
-        },
-        { timeout: 8_000, interval: 16 },
-      );
-    } finally {
       await mounted.cleanup();
     }
   });

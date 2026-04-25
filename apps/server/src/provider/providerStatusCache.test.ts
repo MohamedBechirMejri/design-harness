@@ -1,5 +1,5 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import type { ServerProvider } from "@t3tools/contracts";
+import type { ServerProvider } from "@dh/contracts";
 import { assert, it } from "@effect/vitest";
 import { Effect, FileSystem } from "effect";
 
@@ -23,7 +23,6 @@ const makeProvider = (
   checkedAt: "2026-04-11T00:00:00.000Z",
   models: [],
   slashCommands: [],
-  skills: [],
   ...overrides,
 });
 
@@ -37,10 +36,6 @@ it.layer(NodeServices.layer)("providerStatusCache", (it) => {
         status: "warning",
         auth: { status: "unknown" },
       });
-      const openCodeProvider = makeProvider("opencode", {
-        status: "warning",
-        auth: { status: "unknown", type: "opencode" },
-      });
       const codexPath = resolveProviderStatusCachePath({
         cacheDir: tempDir,
         provider: "codex",
@@ -48,10 +43,6 @@ it.layer(NodeServices.layer)("providerStatusCache", (it) => {
       const claudePath = resolveProviderStatusCachePath({
         cacheDir: tempDir,
         provider: "claudeAgent",
-      });
-      const openCodePath = resolveProviderStatusCachePath({
-        cacheDir: tempDir,
-        provider: "opencode",
       });
 
       yield* writeProviderStatusCache({
@@ -62,14 +53,9 @@ it.layer(NodeServices.layer)("providerStatusCache", (it) => {
         filePath: claudePath,
         provider: claudeProvider,
       });
-      yield* writeProviderStatusCache({
-        filePath: openCodePath,
-        provider: openCodeProvider,
-      });
 
       assert.deepStrictEqual(yield* readProviderStatusCache(codexPath), codexProvider);
       assert.deepStrictEqual(yield* readProviderStatusCache(claudePath), claudeProvider);
-      assert.deepStrictEqual(yield* readProviderStatusCache(openCodePath), openCodeProvider);
     }),
   );
 
@@ -91,14 +77,6 @@ it.layer(NodeServices.layer)("providerStatusCache", (it) => {
         },
       ],
       message: "Cached message",
-      skills: [
-        {
-          name: "github:gh-fix-ci",
-          path: "/tmp/skills/gh-fix-ci/SKILL.md",
-          enabled: true,
-          displayName: "CI Debug",
-        },
-      ],
     });
     const fallbackCodex = makeProvider("codex", {
       models: [
@@ -146,7 +124,6 @@ it.layer(NodeServices.layer)("providerStatusCache", (it) => {
         auth: cachedCodex.auth,
         checkedAt: cachedCodex.checkedAt,
         slashCommands: cachedCodex.slashCommands,
-        skills: cachedCodex.skills,
         message: cachedCodex.message,
       },
     );
@@ -163,7 +140,7 @@ it.layer(NodeServices.layer)("providerStatusCache", (it) => {
       version: null,
       status: "disabled",
       auth: { status: "unknown" },
-      message: "Codex is disabled in T3 Code settings.",
+      message: "Codex is disabled in Design Harness settings.",
     });
 
     assert.deepStrictEqual(

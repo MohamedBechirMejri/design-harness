@@ -5,7 +5,7 @@ import {
   MessageId,
   ProjectId,
   ThreadId,
-} from "@t3tools/contracts";
+} from "@dh/contracts";
 import { describe, expect, it } from "vitest";
 import { Effect } from "effect";
 
@@ -347,7 +347,7 @@ describe("decider project scripts", () => {
           type: "thread.interaction-mode.set",
           commandId: CommandId.make("cmd-interaction-mode-set"),
           threadId: ThreadId.make("thread-1"),
-          interactionMode: "plan",
+          interactionMode: "design",
           createdAt: now,
         },
         readModel,
@@ -362,7 +362,7 @@ describe("decider project scripts", () => {
       type: "thread.interaction-mode-set",
       payload: {
         threadId: ThreadId.make("thread-1"),
-        interactionMode: "plan",
+        interactionMode: "design",
       },
     });
   });

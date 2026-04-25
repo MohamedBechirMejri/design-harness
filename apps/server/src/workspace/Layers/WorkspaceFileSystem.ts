@@ -1,6 +1,6 @@
 import { Effect, FileSystem, Layer, Path } from "effect";
 
-import type { DesignPreviewEntry } from "@t3tools/contracts";
+import type { DesignPreviewEntry } from "@dh/contracts";
 
 import {
   WorkspaceFileSystem,
@@ -10,7 +10,7 @@ import {
 import { WorkspaceEntries } from "../Services/WorkspaceEntries.ts";
 import { WorkspacePaths, WorkspacePathOutsideRootError } from "../Services/WorkspacePaths.ts";
 
-const DESIGN_SUBDIR = ".t3code/design";
+const DESIGN_SUBDIR = ".dh/design";
 const DESIGN_MAX_FILE_BYTES = 2 * 1024 * 1024;
 
 export const makeWorkspaceFileSystem = Effect.gen(function* () {

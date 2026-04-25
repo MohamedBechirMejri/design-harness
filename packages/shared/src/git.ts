@@ -5,11 +5,11 @@ import type {
   GitStatusRemoteResult,
   GitStatusResult,
   GitStatusStreamEvent,
-} from "@t3tools/contracts";
+} from "@dh/contracts";
 import * as Effect from "effect/Effect";
 import * as Random from "effect/Random";
 
-export const WORKTREE_BRANCH_PREFIX = "t3code";
+export const WORKTREE_BRANCH_PREFIX = "dh";
 const TEMP_WORKTREE_BRANCH_PATTERN = new RegExp(`^${WORKTREE_BRANCH_PREFIX}\\/[0-9a-f]{8}$`);
 
 /**
@@ -260,7 +260,6 @@ const EMPTY_GIT_STATUS_REMOTE: GitStatusRemoteResult = {
   hasUpstream: false,
   aheadCount: 0,
   behindCount: 0,
-  pr: null,
 };
 
 export function mergeGitStatusParts(
@@ -278,7 +277,6 @@ function toRemoteStatusPart(status: GitStatusResult): GitStatusRemoteResult {
     hasUpstream: status.hasUpstream,
     aheadCount: status.aheadCount,
     behindCount: status.behindCount,
-    pr: status.pr,
   };
 }
 

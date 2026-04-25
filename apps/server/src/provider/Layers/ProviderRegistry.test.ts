@@ -7,10 +7,10 @@ import {
   ServerSettings,
   type ServerProvider,
   type ServerSettings as ContractServerSettings,
-} from "@t3tools/contracts";
+} from "@dh/contracts";
 import * as PlatformError from "effect/PlatformError";
 import { ChildProcessSpawner } from "effect/unstable/process";
-import { deepMerge } from "@t3tools/shared/Struct";
+import { deepMerge } from "@dh/shared/Struct";
 
 import { checkCodexProviderStatus, type CodexAppServerProviderSnapshot } from "./CodexProvider.ts";
 import { checkClaudeProviderStatus, parseClaudeAuthStatusFromOutput } from "./ClaudeProvider.ts";
@@ -23,7 +23,7 @@ import { ServerConfig } from "../../config.ts";
 import { ServerSettingsService, type ServerSettingsShape } from "../../serverSettings.ts";
 import { ProviderRegistry } from "../Services/ProviderRegistry.ts";
 
-process.env.T3CODE_CURSOR_ENABLED = "1";
+process.env.DH_CURSOR_ENABLED = "1";
 
 // ── Test helpers ────────────────────────────────────────────────────
 
@@ -120,7 +120,6 @@ function makeCodexProbeSnapshot(
         capabilities: codexModelCapabilities,
       },
     ],
-    skills: [],
     ...input,
   };
 }
@@ -158,19 +157,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest()))(
       it.effect("uses the app-server account and model list for provider status", () =>
         Effect.gen(function* () {
           const status = yield* checkCodexProviderStatus(() =>
-            Effect.succeed(
-              makeCodexProbeSnapshot({
-                skills: [
-                  {
-                    name: "github:gh-fix-ci",
-                    path: "/Users/test/.codex/skills/gh-fix-ci/SKILL.md",
-                    enabled: true,
-                    displayName: "CI Debug",
-                    shortDescription: "Debug failing GitHub Actions checks",
-                  },
-                ],
-              }),
-            ),
+            Effect.succeed(makeCodexProbeSnapshot()),
           );
 
           assert.strictEqual(status.provider, "codex");
@@ -186,15 +173,6 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest()))(
               name: "GPT Live Codex",
               isCustom: false,
               capabilities: codexModelCapabilities,
-            },
-          ]);
-          assert.deepStrictEqual(status.skills, [
-            {
-              name: "github:gh-fix-ci",
-              path: "/Users/test/.codex/skills/gh-fix-ci/SKILL.md",
-              enabled: true,
-              displayName: "CI Debug",
-              shortDescription: "Debug failing GitHub Actions checks",
             },
           ]);
         }),
@@ -297,7 +275,6 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest()))(
             version: "1.0.0",
             models: [],
             slashCommands: [],
-            skills: [],
           },
           {
             provider: "claudeAgent",
@@ -309,7 +286,6 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest()))(
             version: "1.0.0",
             models: [],
             slashCommands: [],
-            skills: [],
           },
         ] as const satisfies ReadonlyArray<ServerProvider>;
 
@@ -318,7 +294,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest()))(
 
       it("preserves previously discovered provider models when a refresh returns none", () => {
         const previousProvider = {
-          provider: "cursor",
+          provider: "claudeAgent",
           status: "ready",
           enabled: true,
           installed: true,
@@ -340,7 +316,6 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest()))(
             },
           ],
           slashCommands: [],
-          skills: [],
         } as const satisfies ServerProvider;
         const refreshedProvider = {
           ...previousProvider,
@@ -355,7 +330,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest()))(
 
       it("fills missing capabilities from the previous provider snapshot", () => {
         const previousProvider = {
-          provider: "cursor",
+          provider: "claudeAgent",
           status: "ready",
           enabled: true,
           installed: true,
@@ -377,7 +352,6 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest()))(
             },
           ],
           slashCommands: [],
-          skills: [],
         } as const satisfies ServerProvider;
         const refreshedProvider = {
           ...previousProvider,
@@ -411,7 +385,6 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest()))(
               deepMerge(DEFAULT_SERVER_SETTINGS, {
                 providers: {
                   codex: { enabled: false },
-                  cursor: { enabled: false },
                 },
               }),
             ),
@@ -467,77 +440,6 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest()))(
         }),
       );
 
-      it.effect(
-        "keeps cursor disabled and skips probing when the provider setting is disabled",
-        () =>
-          Effect.gen(function* () {
-            const serverSettings = yield* makeMutableServerSettingsService(
-              Schema.decodeSync(ServerSettings)(
-                deepMerge(DEFAULT_SERVER_SETTINGS, {
-                  providers: {
-                    codex: {
-                      enabled: false,
-                    },
-                    cursor: {
-                      enabled: false,
-                    },
-                  },
-                }),
-              ),
-            );
-            let cursorSpawned = false;
-            const scope = yield* Scope.make();
-            yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void));
-            const providerRegistryLayer = ProviderRegistryLive.pipe(
-              Layer.provideMerge(Layer.succeed(ServerSettingsService, serverSettings)),
-              Layer.provideMerge(
-                ServerConfig.layerTest(process.cwd(), {
-                  prefix: "t3-provider-registry-",
-                }),
-              ),
-              Layer.provideMerge(
-                mockCommandSpawnerLayer((command, args) => {
-                  if (command === "agent") {
-                    cursorSpawned = true;
-                  }
-                  const joined = args.join(" ");
-                  if (joined === "--version") {
-                    return { stdout: `${command} 1.0.0\n`, stderr: "", code: 0 };
-                  }
-                  if (joined === "auth status") {
-                    return { stdout: '{"authenticated":true}\n', stderr: "", code: 0 };
-                  }
-                  throw new Error(`Unexpected args: ${command} ${joined}`);
-                }),
-              ),
-            );
-            const runtimeServices = yield* Layer.build(
-              Layer.mergeAll(
-                Layer.succeed(ServerSettingsService, serverSettings),
-                providerRegistryLayer,
-              ),
-            ).pipe(Scope.provide(scope));
-
-            yield* Effect.gen(function* () {
-              const registry = yield* ProviderRegistry;
-              const providers = yield* registry.getProviders;
-              const cursorProvider = providers.find((provider) => provider.provider === "cursor");
-
-              assert.deepStrictEqual(
-                providers.map((provider) => provider.provider),
-                ["codex", "claudeAgent", "opencode", "cursor"],
-              );
-              assert.strictEqual(cursorProvider?.enabled, false);
-              assert.strictEqual(cursorProvider?.status, "disabled");
-              assert.strictEqual(
-                cursorProvider?.message,
-                "Cursor is disabled in T3 Code settings.",
-              );
-              assert.strictEqual(cursorSpawned, false);
-            }).pipe(Effect.provide(runtimeServices));
-          }),
-      );
-
       it.effect("skips codex probes entirely when the provider is disabled", () =>
         Effect.gen(function* () {
           const serverSettingsLayer = ServerSettingsService.layerTest({
@@ -557,7 +459,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest()))(
           assert.strictEqual(status.enabled, false);
           assert.strictEqual(status.status, "disabled");
           assert.strictEqual(status.installed, false);
-          assert.strictEqual(status.message, "Codex is disabled in T3 Code settings.");
+          assert.strictEqual(status.message, "Codex is disabled in Design Harness settings.");
         }),
       );
     });

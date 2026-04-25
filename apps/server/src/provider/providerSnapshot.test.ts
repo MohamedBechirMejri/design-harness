@@ -1,33 +1,31 @@
 import { describe, expect, it } from "vitest";
-import type { ModelCapabilities } from "@t3tools/contracts";
+import type { ModelCapabilities } from "@dh/contracts";
 
 import { providerModelsFromSettings } from "./providerSnapshot.ts";
 
-const OPENCODE_CUSTOM_MODEL_CAPABILITIES: ModelCapabilities = {
-  reasoningEffortLevels: [],
+const CLAUDE_CUSTOM_MODEL_CAPABILITIES: ModelCapabilities = {
+  reasoningEffortLevels: [{ value: "high", label: "High", isDefault: true }],
   supportsFastMode: false,
-  supportsThinkingToggle: false,
+  supportsThinkingToggle: true,
   contextWindowOptions: [],
   promptInjectedEffortLevels: [],
-  variantOptions: [{ value: "medium", label: "Medium", isDefault: true }],
-  agentOptions: [{ value: "build", label: "Build", isDefault: true }],
 };
 
 describe("providerModelsFromSettings", () => {
   it("applies the provided capabilities to custom models", () => {
     const models = providerModelsFromSettings(
       [],
-      "opencode",
-      ["openai/gpt-5"],
-      OPENCODE_CUSTOM_MODEL_CAPABILITIES,
+      "claudeAgent",
+      ["claude-sonnet-5-0"],
+      CLAUDE_CUSTOM_MODEL_CAPABILITIES,
     );
 
     expect(models).toEqual([
       {
-        slug: "openai/gpt-5",
-        name: "openai/gpt-5",
+        slug: "claude-sonnet-5-0",
+        name: "claude-sonnet-5-0",
         isCustom: true,
-        capabilities: OPENCODE_CUSTOM_MODEL_CAPABILITIES,
+        capabilities: CLAUDE_CUSTOM_MODEL_CAPABILITIES,
       },
     ]);
   });

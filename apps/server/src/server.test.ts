@@ -21,7 +21,7 @@ import {
   WS_METHODS,
   WsRpcGroup,
   EditorId,
-} from "@t3tools/contracts";
+} from "@dh/contracts";
 import { assert, it } from "@effect/vitest";
 import { assertFailure, assertInclude, assertTrue } from "@effect/vitest/utils";
 import {
@@ -346,7 +346,7 @@ const buildAppUnderTest = (options?: {
       otlpMetricsUrl: undefined,
       otlpExportIntervalMs: 10_000,
       otlpServiceName: "t3-server",
-      mode: "desktop",
+      mode: "web",
       port: 0,
       host: "127.0.0.1",
       cwd: process.cwd(),
@@ -839,7 +839,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         "browser-session-cookie",
         "bearer-session-token",
       ]);
-      assert.isTrue(body.auth.sessionCookieName.startsWith("t3_session_"));
+      assert.isTrue(body.auth.sessionCookieName.startsWith("dh_session_"));
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
@@ -1835,7 +1835,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           checkedAt: "2026-04-11T00:00:00.000Z",
           models: [],
           slashCommands: [],
-          skills: [],
         },
       ] as const;
       const changeEvent = {
@@ -1905,7 +1904,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           checkedAt: "2026-04-11T00:00:00.000Z",
           models: [],
           slashCommands: [],
-          skills: [],
         },
       ] as const;
 
@@ -2283,7 +2281,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
                   hasUpstream: true,
                   aheadCount: 0,
                   behindCount: 0,
-                  pr: null,
                 };
               }),
             status: () =>
@@ -2299,7 +2296,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
                   hasUpstream: true,
                   aheadCount: 0,
                   behindCount: 0,
-                  pr: null,
                 };
               }),
           },
@@ -2349,7 +2345,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
                   hasUpstream: true,
                   aheadCount: 0,
                   behindCount: 0,
-                  pr: null,
                 }),
               ),
           },
@@ -2604,7 +2599,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
               prepareWorktree: {
                 projectCwd: "/tmp/project",
                 baseBranch: "main",
-                branch: "t3code/bootstrap-branch",
+                branch: "dh/bootstrap-branch",
               },
             },
             createdAt,

@@ -1,12 +1,12 @@
 "use client";
 
-import { scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime";
+import { scopeProjectRef, scopeThreadRef } from "@dh/client-runtime";
 import {
   DEFAULT_MODEL_BY_PROVIDER,
   type EnvironmentId,
   type FilesystemBrowseResult,
   type ProjectId,
-} from "@t3tools/contracts";
+} from "@dh/contracts";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import {
@@ -34,10 +34,6 @@ import { useShallow } from "zustand/react/shallow";
 import { useCommandPaletteStore } from "../commandPaletteStore";
 import { readEnvironmentApi } from "../environmentApi";
 import { readPrimaryEnvironmentDescriptor, usePrimaryEnvironmentId } from "../environments/primary";
-import {
-  useSavedEnvironmentRegistryStore,
-  useSavedEnvironmentRuntimeStore,
-} from "../environments/runtime";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { useSettings } from "../hooks/useSettings";
 import { readLocalApi } from "../localApi";
@@ -216,15 +212,11 @@ function OpenCommandPaletteDialog() {
   const [isPickingProjectFolder, setIsPickingProjectFolder] = useState(false);
   const primaryEnvironmentId = usePrimaryEnvironmentId();
   const primaryEnvironmentLabel = readPrimaryEnvironmentDescriptor()?.label ?? null;
-  const savedEnvironmentRegistry = useSavedEnvironmentRegistryStore((state) => state.byId);
-  const savedEnvironmentRuntimeById = useSavedEnvironmentRuntimeStore((state) => state.byId);
 
   const addProjectEnvironmentOptions = useMemo(() => {
     const options: AddProjectEnvironmentOption[] = [];
-    const seenEnvironmentIds = new Set<EnvironmentId>();
 
     if (primaryEnvironmentId) {
-      seenEnvironmentIds.add(primaryEnvironmentId);
       options.push({
         environmentId: primaryEnvironmentId,
         label: resolveEnvironmentOptionLabel({
@@ -236,52 +228,17 @@ function OpenCommandPaletteDialog() {
       });
     }
 
-    for (const record of Object.values(savedEnvironmentRegistry)) {
-      if (seenEnvironmentIds.has(record.environmentId)) {
-        continue;
-      }
-
-      const runtimeState = savedEnvironmentRuntimeById[record.environmentId];
-      options.push({
-        environmentId: record.environmentId,
-        label: resolveEnvironmentOptionLabel({
-          isPrimary: false,
-          environmentId: record.environmentId,
-          runtimeLabel: runtimeState?.descriptor?.label ?? null,
-          savedLabel: record.label,
-        }),
-        isPrimary: false,
-      });
-    }
-
-    options.sort((left, right) => {
-      if (left.isPrimary !== right.isPrimary) {
-        return left.isPrimary ? -1 : 1;
-      }
-      return left.label.localeCompare(right.label);
-    });
-
     return options;
-  }, [
-    primaryEnvironmentId,
-    primaryEnvironmentLabel,
-    savedEnvironmentRegistry,
-    savedEnvironmentRuntimeById,
-  ]);
+  }, [primaryEnvironmentId, primaryEnvironmentLabel]);
   const defaultAddProjectEnvironmentId = addProjectEnvironmentOptions[0]?.environmentId ?? null;
   const browseEnvironmentId = addProjectEnvironmentId ?? defaultAddProjectEnvironmentId;
   const browseEnvironmentPlatform = useMemo(() => {
     const os =
       browseEnvironmentId && primaryEnvironmentId && browseEnvironmentId === primaryEnvironmentId
         ? (readPrimaryEnvironmentDescriptor()?.platform.os ?? null)
-        : browseEnvironmentId
-          ? (savedEnvironmentRuntimeById[browseEnvironmentId]?.descriptor?.platform.os ??
-            savedEnvironmentRuntimeById[browseEnvironmentId]?.serverConfig?.environment.platform
-              .os ??
-            null)
-          : null;
+        : null;
     return getEnvironmentBrowsePlatform(os);
-  }, [browseEnvironmentId, primaryEnvironmentId, savedEnvironmentRuntimeById]);
+  }, [browseEnvironmentId, primaryEnvironmentId]);
   const isBrowsing = isFilesystemBrowseQuery(query, browseEnvironmentPlatform);
   const paletteMode = getCommandPaletteMode({ currentView, isBrowsing });
   const getAddProjectInitialQueryForEnvironment = useCallback(
@@ -289,16 +246,14 @@ function OpenCommandPaletteDialog() {
       const environmentSettings =
         environmentId && primaryEnvironmentId && environmentId === primaryEnvironmentId
           ? settings
-          : environmentId
-            ? savedEnvironmentRuntimeById[environmentId]?.serverConfig?.settings
-            : null;
+          : null;
       const baseDirectory = environmentSettings?.addProjectBaseDirectory?.trim() ?? "";
       if (baseDirectory.length === 0) {
         return "~/";
       }
       return ensureBrowseDirectoryPath(baseDirectory);
     },
-    [primaryEnvironmentId, savedEnvironmentRuntimeById, settings],
+    [primaryEnvironmentId, settings],
   );
 
   const projectCwdById = useMemo(
@@ -858,13 +813,7 @@ function OpenCommandPaletteDialog() {
   const submitActionLabel = willCreateProjectPath ? "Create & Add" : "Add";
   const addShortcutLabel = hasHighlightedBrowseItem ? `${submitModifierLabel} Enter` : "Enter";
   const fileManagerName = getLocalFileManagerName(navigator.platform);
-  const canOpenProjectFromFileManager =
-    isBrowsing &&
-    browseEnvironmentId !== null &&
-    primaryEnvironmentId !== null &&
-    browseEnvironmentId === primaryEnvironmentId &&
-    typeof window !== "undefined" &&
-    window.desktopBridge !== undefined;
+  const canOpenProjectFromFileManager = false;
   const fileManagerInitialPath = useMemo(() => {
     if (!canOpenProjectFromFileManager) {
       return undefined;

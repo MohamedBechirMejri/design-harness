@@ -4,8 +4,8 @@ import type {
   OrchestrationShellStreamEvent,
   ServerConfig,
   ServerLifecycleWelcomePayload,
-} from "@t3tools/contracts";
-import type { KnownEnvironment } from "@t3tools/client-runtime";
+} from "@dh/contracts";
+import type { KnownEnvironment } from "@dh/client-runtime";
 
 import type { WsRpcClient } from "~/rpc/wsRpcClient";
 

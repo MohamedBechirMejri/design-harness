@@ -1,5 +1,5 @@
-import { type ProviderKind, PROVIDER_DISPLAY_NAMES } from "@t3tools/contracts";
-import { normalizeSearchQuery, scoreQueryMatch } from "@t3tools/shared/searchRanking";
+import { type ProviderKind, PROVIDER_DISPLAY_NAMES } from "@dh/contracts";
+import { normalizeSearchQuery, scoreQueryMatch } from "@dh/shared/searchRanking";
 
 type ModelPickerSearchableModel = {
   provider: ProviderKind;

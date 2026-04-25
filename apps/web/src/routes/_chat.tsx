@@ -1,4 +1,4 @@
-import { Outlet, createFileRoute, redirect } from "@tanstack/react-router";
+import { Outlet, createFileRoute } from "@tanstack/react-router";
 import { useEffect } from "react";
 
 import { useCommandPaletteStore } from "../commandPaletteStore";
@@ -100,10 +100,5 @@ function ChatRouteLayout() {
 }
 
 export const Route = createFileRoute("/_chat")({
-  beforeLoad: async ({ context }) => {
-    if (context.authGateState.status !== "authenticated") {
-      throw redirect({ to: "/pair", replace: true });
-    }
-  },
   component: ChatRouteLayout,
 });

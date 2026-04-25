@@ -19,7 +19,7 @@ import {
   type SDKUserMessage,
   type ModelUsage,
 } from "@anthropic-ai/claude-agent-sdk";
-import { parseCliArgs } from "@t3tools/shared/cliArgs";
+import { parseCliArgs } from "@dh/shared/cliArgs";
 import {
   ApprovalRequestId,
   type CanonicalItemType,
@@ -41,8 +41,8 @@ import {
   TurnId,
   type UserInputQuestion,
   ClaudeAgentEffort,
-} from "@t3tools/contracts";
-import { applyClaudePromptEffortPrefix, resolveEffort, trimOrNull } from "@t3tools/shared/model";
+} from "@dh/contracts";
+import { applyClaudePromptEffortPrefix, resolveEffort, trimOrNull } from "@dh/shared/model";
 import {
   Cause,
   DateTime,
@@ -554,7 +554,7 @@ const CLAUDE_SETTING_SOURCES = [
   "local",
 ] as const satisfies ReadonlyArray<SettingSource>;
 
-function buildPromptText(input: ProviderSendTurnInput): string {
+function buildPromptText(input: ProviderSendTurnInput, sessionCwd: string | undefined): string {
   const rawEffort =
     input.modelSelection?.provider === "claudeAgent" ? input.modelSelection.options?.effort : null;
   const claudeModel =
@@ -568,7 +568,10 @@ function buildPromptText(input: ProviderSendTurnInput): string {
     trimmedEffort && caps.promptInjectedEffortLevels.includes(trimmedEffort) ? trimmedEffort : null;
   const withEffort = applyClaudePromptEffortPrefix(input.input?.trim() ?? "", promptEffort);
   if (input.interactionMode === "design") {
-    const designInstructions = renderDesignModeInstructions({ threadId: input.threadId });
+    const designInstructions = renderDesignModeInstructions({
+      threadId: input.threadId,
+      ...(sessionCwd ? { cwd: sessionCwd } : {}),
+    });
     return `${designInstructions}\n\n---\n\n${withEffort}`;
   }
   return withEffort;
@@ -607,9 +610,10 @@ const buildUserMessageEffect = Effect.fn("buildUserMessageEffect")(function* (
   dependencies: {
     readonly fileSystem: FileSystem.FileSystem;
     readonly attachmentsDir: string;
+    readonly sessionCwd: string | undefined;
   },
 ) {
-  const text = buildPromptText(input);
+  const text = buildPromptText(input, dependencies.sessionCwd);
   const sdkContent: Array<Record<string, unknown>> = [];
 
   if (text.length > 0) {
@@ -2843,7 +2847,29 @@ const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         "auto-accept-edits": "acceptEdits",
         "full-access": "bypassPermissions",
       };
-      const permissionMode = runtimeModeToPermission[input.runtimeMode];
+      const isDesignMode = input.interactionMode === "design";
+      // Design mode: file IO is restricted to the sandboxed cwd, plus the
+      // web tools so the model can pull in inspiration / icon sets / CDN
+      // assets. Everything that lets it explore the surrounding repo
+      // (Bash, Grep, Glob, sub-agent Task) stays blocked.
+      const designModeAllowedTools = [
+        "Write",
+        "Edit",
+        "MultiEdit",
+        "Read",
+        "WebFetch",
+        "WebSearch",
+      ] as const;
+      const designModeDisallowedTools = [
+        "Bash",
+        "Glob",
+        "Grep",
+        "Task",
+        "NotebookEdit",
+        "NotebookRead",
+        "TodoWrite",
+      ] as const;
+      const permissionMode = isDesignMode ? "default" : runtimeModeToPermission[input.runtimeMode];
       const settings = {
         ...(typeof thinking === "boolean" ? { alwaysThinkingEnabled: thinking } : {}),
         ...(fastMode ? { fastMode: true } : {}),
@@ -2864,6 +2890,12 @@ const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         ...(permissionMode ? { permissionMode } : {}),
         ...(permissionMode === "bypassPermissions"
           ? { allowDangerouslySkipPermissions: true }
+          : {}),
+        ...(isDesignMode
+          ? {
+              allowedTools: [...designModeAllowedTools],
+              disallowedTools: [...designModeDisallowedTools],
+            }
           : {}),
         ...(Object.keys(settings).length > 0 ? { settings } : {}),
         ...(existingResumeSessionId ? { resume: existingResumeSessionId } : {}),
@@ -3028,16 +3060,10 @@ const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
     }
 
     // Apply interaction mode by switching the SDK's permission mode.
-    // "plan" maps directly to the SDK's "plan" permission mode;
     // "default" and "design" both restore the session's original permission
     // mode — design mode is driven entirely by prompt instructions.
     // When interactionMode is absent we leave the current mode unchanged.
-    if (input.interactionMode === "plan") {
-      yield* Effect.tryPromise({
-        try: () => context.query.setPermissionMode("plan"),
-        catch: (cause) => toRequestError(input.threadId, "turn/setPermissionMode", cause),
-      });
-    } else if (input.interactionMode === "default" || input.interactionMode === "design") {
+    if (input.interactionMode === "default" || input.interactionMode === "design") {
       yield* Effect.tryPromise({
         try: () => context.query.setPermissionMode(context.basePermissionMode ?? "default"),
         catch: (cause) => toRequestError(input.threadId, "turn/setPermissionMode", cause),
@@ -3079,6 +3105,7 @@ const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
     const message = yield* buildUserMessageEffect(input, {
       fileSystem,
       attachmentsDir: serverConfig.attachmentsDir,
+      sessionCwd: context.session.cwd,
     });
 
     yield* Queue.offer(context.promptQueue, {

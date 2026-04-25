@@ -1,5 +1,5 @@
 import { describe, it, assert } from "@effect/vitest";
-import type { ServerProvider } from "@t3tools/contracts";
+import type { ServerProvider } from "@dh/contracts";
 import { Deferred, Effect, Fiber, PubSub, Ref, Stream } from "effect";
 
 import { makeManagedServerProvider } from "./makeManagedServerProvider.ts";
@@ -19,7 +19,6 @@ const initialSnapshot: ServerProvider = {
   message: "Checking provider availability...",
   models: [],
   slashCommands: [],
-  skills: [],
 };
 
 const refreshedSnapshot: ServerProvider = {
@@ -32,7 +31,6 @@ const refreshedSnapshot: ServerProvider = {
   checkedAt: "2026-04-10T00:00:01.000Z",
   models: [],
   slashCommands: [],
-  skills: [],
 };
 
 const enrichedSnapshot: ServerProvider = {

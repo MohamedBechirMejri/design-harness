@@ -20,7 +20,7 @@ import {
   ProviderApprovalDecision,
   ThreadId,
   ProviderSendTurnInput,
-} from "@t3tools/contracts";
+} from "@dh/contracts";
 import { Effect, Exit, Fiber, FileSystem, Layer, Queue, Schema, Scope, Stream } from "effect";
 import { ChildProcessSpawner } from "effect/unstable/process";
 import * as CodexErrors from "effect-codex-app-server/errors";
@@ -199,7 +199,6 @@ function toCanonicalItemType(raw: string | undefined | null): CanonicalItemType 
   if (type.includes("user")) return "user_message";
   if (type.includes("agent message") || type.includes("assistant")) return "assistant_message";
   if (type.includes("reasoning") || type.includes("thought")) return "reasoning";
-  if (type.includes("plan") || type.includes("todo")) return "plan";
   if (type.includes("command")) return "command_execution";
   if (type.includes("file change") || type.includes("patch") || type.includes("edit"))
     return "file_change";
@@ -223,8 +222,6 @@ function itemTitle(itemType: CanonicalItemType): string | undefined {
       return "User message";
     case "reasoning":
       return "Reasoning";
-    case "plan":
-      return "Plan";
     case "command_execution":
       return "Ran command";
     case "file_change":
@@ -809,27 +806,6 @@ function mapToRuntimeEvents(
   }
 
   if (event.method === "item/completed") {
-    const payload = readPayload(EffectCodexSchema.V2ItemCompletedNotification, event.payload);
-    const item = payload?.item;
-    if (!item) {
-      return [];
-    }
-    const itemType = toCanonicalItemType(item.type);
-    if (itemType === "plan") {
-      const detail = itemDetail(item);
-      if (!detail) {
-        return [];
-      }
-      return [
-        {
-          ...runtimeEventBase(event, canonicalThreadId),
-          type: "turn.proposed.completed",
-          payload: {
-            planMarkdown: detail,
-          },
-        },
-      ];
-    }
     const completed = mapItemLifecycle(event, canonicalThreadId, "item.completed");
     return completed ? [completed] : [];
   }
@@ -1369,6 +1345,7 @@ const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
             ? { resumeCursor: input.resumeCursor }
             : {}),
           runtimeMode: input.runtimeMode,
+          ...(input.interactionMode ? { interactionMode: input.interactionMode } : {}),
           ...(input.modelSelection?.provider === "codex"
             ? { model: input.modelSelection.model }
             : {}),

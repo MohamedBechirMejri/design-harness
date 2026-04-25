@@ -11,7 +11,7 @@ import {
   type UserInputQuestion,
   type ThreadId,
   type TurnId,
-} from "@t3tools/contracts";
+} from "@dh/contracts";
 
 import type {
   ChatMessage,
@@ -29,12 +29,10 @@ export const PROVIDER_OPTIONS: Array<{
   label: string;
   available: boolean;
   /** Shown on the model picker sidebar when relevant */
-  pickerSidebarBadge?: "new" | "soon";
+  pickerSidebarBadge?: "new";
 }> = [
   { value: "codex", label: "Codex", available: true },
   { value: "claudeAgent", label: "Claude", available: true },
-  { value: "opencode", label: "OpenCode", available: true, pickerSidebarBadge: "new" },
-  { value: "cursor", label: "Cursor", available: true, pickerSidebarBadge: "new" },
 ];
 
 export interface WorkLogEntry {

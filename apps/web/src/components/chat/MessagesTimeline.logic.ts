@@ -1,6 +1,6 @@
 import { type TimelineEntry, type WorkLogEntry } from "../../session-logic";
-import { type ChatMessage, type ProposedPlan, type TurnDiffSummary } from "../../types";
-import { type MessageId } from "@t3tools/contracts";
+import { type ChatMessage, type TurnDiffSummary } from "../../types";
+import { type MessageId } from "@dh/contracts";
 
 export const MAX_VISIBLE_WORK_LOG_ENTRIES = 6;
 
@@ -28,12 +28,6 @@ export type MessagesTimelineRow =
       showAssistantCopyButton: boolean;
       assistantTurnDiffSummary?: TurnDiffSummary | undefined;
       revertTurnCount?: number | undefined;
-    }
-  | {
-      kind: "proposed-plan";
-      id: string;
-      createdAt: string;
-      proposedPlan: ProposedPlan;
     }
   | { kind: "working"; id: string; createdAt: string | null };
 
@@ -147,12 +141,7 @@ export function deriveMessagesTimelineRows(input: {
     }
 
     if (timelineEntry.kind === "proposed-plan") {
-      nextRows.push({
-        kind: "proposed-plan",
-        id: timelineEntry.id,
-        createdAt: timelineEntry.createdAt,
-        proposedPlan: timelineEntry.proposedPlan,
-      });
+      // Proposed-plan entries are no longer surfaced in the timeline.
       continue;
     }
 
@@ -218,9 +207,6 @@ function isRowUnchanged(a: MessagesTimelineRow, b: MessagesTimelineRow): boolean
   switch (a.kind) {
     case "working":
       return a.createdAt === (b as typeof a).createdAt;
-
-    case "proposed-plan":
-      return a.proposedPlan === (b as typeof a).proposedPlan;
 
     case "work":
       return a.groupedEntries === (b as typeof a).groupedEntries;

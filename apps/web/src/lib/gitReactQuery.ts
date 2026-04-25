@@ -1,4 +1,4 @@
-import { type EnvironmentId } from "@t3tools/contracts";
+import { type EnvironmentId } from "@dh/contracts";
 import { infiniteQueryOptions, mutationOptions, type QueryClient } from "@tanstack/react-query";
 import { ensureEnvironmentApi } from "../environmentApi";
 

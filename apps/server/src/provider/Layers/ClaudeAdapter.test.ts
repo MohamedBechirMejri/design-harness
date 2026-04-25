@@ -10,13 +10,7 @@ import type {
   SDKMessage,
   SDKUserMessage,
 } from "@anthropic-ai/claude-agent-sdk";
-import {
-  ApprovalRequestId,
-  ProviderItemId,
-  ProviderRuntimeEvent,
-  type RuntimeMode,
-  ThreadId,
-} from "@t3tools/contracts";
+import { ApprovalRequestId, ProviderItemId, ProviderRuntimeEvent, ThreadId } from "@dh/contracts";
 import { assert, describe, it } from "@effect/vitest";
 import { Effect, Fiber, Layer, Random, Stream } from "effect";
 
@@ -2820,88 +2814,6 @@ describe("ClaudeAdapterLive", () => {
     );
   });
 
-  it.effect("sets plan permission mode on sendTurn when interactionMode is plan", () => {
-    const harness = makeHarness();
-    return Effect.gen(function* () {
-      const adapter = yield* ClaudeAdapter;
-
-      const session = yield* adapter.startSession({
-        threadId: THREAD_ID,
-        provider: "claudeAgent",
-        runtimeMode: "full-access",
-      });
-      yield* adapter.sendTurn({
-        threadId: session.threadId,
-        input: "plan this for me",
-        interactionMode: "plan",
-        attachments: [],
-      });
-
-      assert.deepEqual(harness.query.setPermissionModeCalls, ["plan"]);
-    }).pipe(
-      Effect.provideService(Random.Random, makeDeterministicRandomService()),
-      Effect.provide(harness.layer),
-    );
-  });
-
-  it.effect.each<{ runtimeMode: RuntimeMode; expectedBase: PermissionMode }>([
-    { runtimeMode: "full-access", expectedBase: "bypassPermissions" },
-    { runtimeMode: "approval-required", expectedBase: "default" },
-    { runtimeMode: "auto-accept-edits", expectedBase: "acceptEdits" },
-  ])(
-    "restores $expectedBase permission mode after plan turn ($runtimeMode)",
-    ({ runtimeMode, expectedBase }) => {
-      const harness = makeHarness();
-      return Effect.gen(function* () {
-        const adapter = yield* ClaudeAdapter;
-
-        const session = yield* adapter.startSession({
-          threadId: THREAD_ID,
-          provider: "claudeAgent",
-          runtimeMode,
-        });
-
-        // First turn in plan mode
-        yield* adapter.sendTurn({
-          threadId: session.threadId,
-          input: "plan this",
-          interactionMode: "plan",
-          attachments: [],
-        });
-
-        // Complete the turn so we can send another
-        const turnCompletedFiber = yield* Stream.filter(
-          adapter.streamEvents,
-          (event) => event.type === "turn.completed",
-        ).pipe(Stream.runHead, Effect.forkChild);
-
-        harness.query.emit({
-          type: "result",
-          subtype: "success",
-          is_error: false,
-          errors: [],
-          session_id: `sdk-session-${runtimeMode}`,
-          uuid: `result-${runtimeMode}`,
-        } as unknown as SDKMessage);
-
-        yield* Fiber.join(turnCompletedFiber);
-
-        // Second turn back to default
-        yield* adapter.sendTurn({
-          threadId: session.threadId,
-          input: "now do it",
-          interactionMode: "default",
-          attachments: [],
-        });
-
-        assert.deepEqual(harness.query.setPermissionModeCalls, ["plan", expectedBase]);
-      }).pipe(
-        Effect.provideService(Random.Random, makeDeterministicRandomService()),
-        Effect.provide(harness.layer),
-      );
-    },
-  );
-
   it.effect("does not call setPermissionMode when interactionMode is absent", () => {
     const harness = makeHarness();
     return Effect.gen(function* () {
@@ -2941,7 +2853,7 @@ describe("ClaudeAdapterLive", () => {
       yield* adapter.sendTurn({
         threadId: session.threadId,
         input: "plan this",
-        interactionMode: "plan",
+        interactionMode: "default",
         attachments: [],
       });
       yield* Stream.take(adapter.streamEvents, 1).pipe(Stream.runDrain);
@@ -3007,7 +2919,7 @@ describe("ClaudeAdapterLive", () => {
       yield* adapter.sendTurn({
         threadId: session.threadId,
         input: "plan this",
-        interactionMode: "plan",
+        interactionMode: "default",
         attachments: [],
       });
       yield* Stream.take(adapter.streamEvents, 1).pipe(Stream.runDrain);

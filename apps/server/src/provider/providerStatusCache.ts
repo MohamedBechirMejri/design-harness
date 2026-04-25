@@ -1,5 +1,5 @@
 import * as nodePath from "node:path";
-import { type ServerProvider, ServerProvider as ServerProviderSchema } from "@t3tools/contracts";
+import { type ServerProvider, ServerProvider as ServerProviderSchema } from "@dh/contracts";
 import { Cause, Effect, FileSystem, Path, Schema } from "effect";
 
 export const PROVIDER_CACHE_IDS = ["codex", "claudeAgent"] as const satisfies ReadonlyArray<
@@ -51,7 +51,6 @@ export const hydrateCachedProvider = (input: {
     auth: input.cachedProvider.auth,
     checkedAt: input.cachedProvider.checkedAt,
     slashCommands: input.cachedProvider.slashCommands,
-    skills: input.cachedProvider.skills,
   };
 
   return input.cachedProvider.message

@@ -16,7 +16,7 @@ import type {
   DesignPreviewReadResult,
   ProjectWriteFileInput,
   ProjectWriteFileResult,
-} from "@t3tools/contracts";
+} from "@dh/contracts";
 import { WorkspacePathOutsideRootError } from "./WorkspacePaths.ts";
 
 export class WorkspaceFileSystemError extends Schema.TaggedErrorClass<WorkspaceFileSystemError>()(
@@ -48,7 +48,7 @@ export interface WorkspaceFileSystemShape {
   >;
 
   /**
-   * List files written under `.t3code/design/<threadId>/` in the given workspace.
+   * List files written under `.dh/design/<threadId>/` in the given workspace.
    *
    * Returns an empty list if the directory does not exist yet.
    */
@@ -62,7 +62,7 @@ export interface WorkspaceFileSystemShape {
   >;
 
   /**
-   * Read a single file under `.t3code/design/<threadId>/` as text.
+   * Read a single file under `.dh/design/<threadId>/` as text.
    *
    * Rejects relative paths that escape the design directory.
    */

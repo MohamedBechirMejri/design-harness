@@ -8,7 +8,7 @@ import type {
   ProviderSendTurnInput,
   ProviderSession,
   ProviderTurnStartResult,
-} from "@t3tools/contracts";
+} from "@dh/contracts";
 import {
   ApprovalRequestId,
   EventId,
@@ -16,7 +16,7 @@ import {
   ProviderSessionStartInput,
   ThreadId,
   TurnId,
-} from "@t3tools/contracts";
+} from "@dh/contracts";
 import { it, assert, vi } from "@effect/vitest";
 
 import { Effect, Fiber, Layer, Metric, Option, PubSub, Ref, Stream } from "effect";
@@ -245,17 +245,14 @@ const hasMetricSnapshot = (
 function makeProviderServiceLayer() {
   const codex = makeFakeCodexAdapter();
   const claude = makeFakeCodexAdapter("claudeAgent");
-  const cursor = makeFakeCodexAdapter("cursor");
   const registry: typeof ProviderAdapterRegistry.Service = {
     getByProvider: (provider) =>
       provider === "codex"
         ? Effect.succeed(codex.adapter)
         : provider === "claudeAgent"
           ? Effect.succeed(claude.adapter)
-          : provider === "cursor"
-            ? Effect.succeed(cursor.adapter)
-            : Effect.fail(new ProviderUnsupportedError({ provider })),
-    listProviders: () => Effect.succeed(["codex", "claudeAgent", "cursor"]),
+          : Effect.fail(new ProviderUnsupportedError({ provider })),
+    listProviders: () => Effect.succeed(["codex", "claudeAgent"]),
   };
 
   const providerAdapterLayer = Layer.succeed(ProviderAdapterRegistry, registry);
@@ -282,7 +279,6 @@ function makeProviderServiceLayer() {
   return {
     codex,
     claude,
-    cursor,
     layer,
   };
 }
@@ -331,7 +327,7 @@ it.effect("ProviderServiceLive rejects new sessions for disabled providers", () 
     );
 
     assert.instanceOf(failure, ProviderValidationError);
-    assert.include(failure.issue, "Provider 'claudeAgent' is disabled in T3 Code settings.");
+    assert.include(failure.issue, "Provider 'claudeAgent' is disabled in Design Harness settings.");
     assert.equal(claude.startSession.mock.calls.length, 0);
   }).pipe(Effect.provide(NodeServices.layer)),
 );
@@ -1265,7 +1261,7 @@ fanout.layer("ProviderServiceLive fanout", (it) => {
       const snapshots = yield* Metric.snapshot;
 
       assert.equal(
-        hasMetricSnapshot(snapshots, "t3_provider_turns_total", {
+        hasMetricSnapshot(snapshots, "dh_provider_turns_total", {
           provider: "claudeAgent",
           operation: "interrupt",
           outcome: "success",
@@ -1273,7 +1269,7 @@ fanout.layer("ProviderServiceLive fanout", (it) => {
         true,
       );
       assert.equal(
-        hasMetricSnapshot(snapshots, "t3_provider_turns_total", {
+        hasMetricSnapshot(snapshots, "dh_provider_turns_total", {
           provider: "claudeAgent",
           operation: "approval-response",
           outcome: "success",
@@ -1281,7 +1277,7 @@ fanout.layer("ProviderServiceLive fanout", (it) => {
         true,
       );
       assert.equal(
-        hasMetricSnapshot(snapshots, "t3_provider_turns_total", {
+        hasMetricSnapshot(snapshots, "dh_provider_turns_total", {
           provider: "claudeAgent",
           operation: "user-input-response",
           outcome: "success",
@@ -1289,7 +1285,7 @@ fanout.layer("ProviderServiceLive fanout", (it) => {
         true,
       );
       assert.equal(
-        hasMetricSnapshot(snapshots, "t3_provider_turns_total", {
+        hasMetricSnapshot(snapshots, "dh_provider_turns_total", {
           provider: "claudeAgent",
           operation: "rollback",
           outcome: "success",
@@ -1297,7 +1293,7 @@ fanout.layer("ProviderServiceLive fanout", (it) => {
         true,
       );
       assert.equal(
-        hasMetricSnapshot(snapshots, "t3_provider_sessions_total", {
+        hasMetricSnapshot(snapshots, "dh_provider_sessions_total", {
           provider: "claudeAgent",
           operation: "stop",
           outcome: "success",
@@ -1329,7 +1325,7 @@ fanout.layer("ProviderServiceLive fanout", (it) => {
         const snapshots = yield* Metric.snapshot;
 
         assert.equal(
-          hasMetricSnapshot(snapshots, "t3_provider_turns_total", {
+          hasMetricSnapshot(snapshots, "dh_provider_turns_total", {
             provider: "claudeAgent",
             operation: "send",
             outcome: "success",
@@ -1337,7 +1333,7 @@ fanout.layer("ProviderServiceLive fanout", (it) => {
           true,
         );
         assert.equal(
-          hasMetricSnapshot(snapshots, "t3_provider_turn_duration", {
+          hasMetricSnapshot(snapshots, "dh_provider_turn_duration", {
             provider: "claudeAgent",
             operation: "send",
           }),

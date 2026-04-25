@@ -15,8 +15,8 @@ import {
   RuntimeMode,
   ThreadId,
   TurnId,
-} from "@t3tools/contracts";
-import { normalizeModelSlug } from "@t3tools/shared/model";
+} from "@dh/contracts";
+import { normalizeModelSlug } from "@dh/shared/model";
 import { Deferred, Effect, Exit, Layer, Queue, Ref, Scope, Schema, Stream } from "effect";
 import * as SchemaIssue from "effect/SchemaIssue";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
@@ -26,10 +26,7 @@ import * as CodexRpc from "effect-codex-app-server/rpc";
 import * as EffectCodexSchema from "effect-codex-app-server/schema";
 
 import { buildCodexInitializeParams } from "./CodexProvider.ts";
-import {
-  CODEX_DEFAULT_MODE_DEVELOPER_INSTRUCTIONS,
-  CODEX_PLAN_MODE_DEVELOPER_INSTRUCTIONS,
-} from "../CodexDeveloperInstructions.ts";
+import { CODEX_DEFAULT_MODE_DEVELOPER_INSTRUCTIONS } from "../CodexDeveloperInstructions.ts";
 import { renderDesignModeInstructions } from "../DesignModeInstructions.ts";
 
 const PROVIDER = "codex" as const;
@@ -80,6 +77,7 @@ export interface CodexSessionRuntimeOptions {
   readonly homePath?: string;
   readonly cwd: string;
   readonly runtimeMode: RuntimeMode;
+  readonly interactionMode?: ProviderInteractionMode;
   readonly model?: string;
   readonly serviceTier?: EffectCodexSchema.V2ThreadStartParams__ServiceTier | undefined;
   readonly resumeCursor?: CodexResumeCursor;
@@ -262,14 +260,23 @@ function runtimeModeToThreadConfig(input: RuntimeMode): {
 function buildThreadStartParams(input: {
   readonly cwd: string;
   readonly runtimeMode: RuntimeMode;
+  readonly interactionMode?: ProviderInteractionMode;
   readonly model: string | undefined;
   readonly serviceTier: EffectCodexSchema.V2ThreadStartParams__ServiceTier | undefined;
 }): EffectCodexSchema.V2ThreadStartParams {
   const config = runtimeModeToThreadConfig(input.runtimeMode);
+  // Design mode: force every tool call to require approval. Codex's
+  // sandbox restricts WRITES but not READS, and once the model decides
+  // to grep/sed/cat the surrounding repo it'll do so without asking
+  // unless we explicitly demand approval per call.
+  const approvalPolicy: EffectCodexSchema.V2ThreadStartParams__AskForApproval =
+    input.interactionMode === "design" ? "untrusted" : config.approvalPolicy;
+  const sandbox: EffectCodexSchema.V2ThreadStartParams__SandboxMode =
+    input.interactionMode === "design" ? "workspace-write" : config.sandbox;
   return {
     cwd: input.cwd,
-    approvalPolicy: config.approvalPolicy,
-    sandbox: config.sandbox,
+    approvalPolicy,
+    sandbox,
     ...(input.model ? { model: input.model } : {}),
     ...(input.serviceTier ? { serviceTier: input.serviceTier } : {}),
   };
@@ -277,7 +284,11 @@ function buildThreadStartParams(input: {
 
 function runtimeModeToTurnSandboxPolicy(
   input: RuntimeMode,
+  interactionMode?: ProviderInteractionMode,
 ): EffectCodexSchema.V2TurnStartParams__SandboxPolicy {
+  if (interactionMode === "design") {
+    return { type: "workspaceWrite" };
+  }
   switch (input) {
     case "approval-required":
       return {
@@ -298,29 +309,32 @@ function runtimeModeToTurnSandboxPolicy(
 function resolveCodexDeveloperInstructions(input: {
   readonly interactionMode: ProviderInteractionMode;
   readonly threadId: string;
+  readonly cwd: string | undefined;
 }): string {
   switch (input.interactionMode) {
-    case "plan":
-      return CODEX_PLAN_MODE_DEVELOPER_INSTRUCTIONS;
     case "design":
-      return renderDesignModeInstructions({ threadId: input.threadId });
+      return renderDesignModeInstructions({
+        threadId: input.threadId,
+        ...(input.cwd ? { cwd: input.cwd } : {}),
+      });
     case "default":
       return CODEX_DEFAULT_MODE_DEVELOPER_INSTRUCTIONS;
   }
 }
 
-// Codex's RPC mode kind is limited to "plan" | "default". Our extended
-// interaction modes (currently "design") ride on "default" and rely on
+// Codex's RPC mode kind is limited to "plan" | "default". Our interaction
+// modes ("default" and "design") all ride on "default" and rely on
 // developer instructions to drive behavior.
 function toCodexModeKind(
-  mode: ProviderInteractionMode,
+  _mode: ProviderInteractionMode,
 ): EffectCodexSchema.V2TurnStartParams__ModeKind {
-  return mode === "plan" ? "plan" : "default";
+  return "default";
 }
 
 function buildCodexCollaborationMode(input: {
   readonly interactionMode?: ProviderInteractionMode;
   readonly threadId: string;
+  readonly cwd?: string;
   readonly model?: string;
   readonly effort?: EffectCodexSchema.V2TurnStartParams__ReasoningEffort;
 }): EffectCodexSchema.V2TurnStartParams__CollaborationMode | undefined {
@@ -336,6 +350,7 @@ function buildCodexCollaborationMode(input: {
       developer_instructions: resolveCodexDeveloperInstructions({
         interactionMode: input.interactionMode,
         threadId: input.threadId,
+        cwd: input.cwd,
       }),
     },
   };
@@ -343,6 +358,7 @@ function buildCodexCollaborationMode(input: {
 
 export function buildTurnStartParams(input: {
   readonly threadId: string;
+  readonly cwd?: string;
   readonly runtimeMode: RuntimeMode;
   readonly prompt?: string;
   readonly attachments?: ReadonlyArray<{ readonly type: "image"; readonly url: string }>;
@@ -366,8 +382,11 @@ export function buildTurnStartParams(input: {
   }
 
   const config = runtimeModeToThreadConfig(input.runtimeMode);
+  const approvalPolicy: EffectCodexSchema.V2ThreadStartParams__AskForApproval =
+    input.interactionMode === "design" ? "untrusted" : config.approvalPolicy;
   const collaborationMode = buildCodexCollaborationMode({
     threadId: input.threadId,
+    ...(input.cwd ? { cwd: input.cwd } : {}),
     ...(input.interactionMode ? { interactionMode: input.interactionMode } : {}),
     ...(input.model ? { model: input.model } : {}),
     ...(input.effort ? { effort: input.effort } : {}),
@@ -376,8 +395,8 @@ export function buildTurnStartParams(input: {
   return Schema.decodeUnknownEffect(CodexTurnStartParamsWithCollaborationMode)({
     threadId: input.threadId,
     input: turnInput,
-    approvalPolicy: config.approvalPolicy,
-    sandboxPolicy: runtimeModeToTurnSandboxPolicy(input.runtimeMode),
+    approvalPolicy,
+    sandboxPolicy: runtimeModeToTurnSandboxPolicy(input.runtimeMode, input.interactionMode),
     ...(input.model ? { model: input.model } : {}),
     ...(input.serviceTier ? { serviceTier: input.serviceTier } : {}),
     ...(input.effort ? { effort: input.effort } : {}),
@@ -432,6 +451,7 @@ export const openCodexThread = (input: {
   readonly client: CodexThreadOpenClient;
   readonly threadId: ThreadId;
   readonly runtimeMode: RuntimeMode;
+  readonly interactionMode?: ProviderInteractionMode;
   readonly cwd: string;
   readonly requestedModel: string | undefined;
   readonly serviceTier: EffectCodexSchema.V2ThreadStartParams__ServiceTier | undefined;
@@ -440,6 +460,7 @@ export const openCodexThread = (input: {
   const resumeThreadId = input.resumeThreadId;
   const startParams = buildThreadStartParams({
     cwd: input.cwd,
+    ...(input.interactionMode ? { interactionMode: input.interactionMode } : {}),
     runtimeMode: input.runtimeMode,
     model: input.requestedModel,
     serviceTier: input.serviceTier,
@@ -1166,6 +1187,7 @@ export const makeCodexSessionRuntime = (
         client,
         threadId: options.threadId,
         runtimeMode: options.runtimeMode,
+        ...(options.interactionMode ? { interactionMode: options.interactionMode } : {}),
         cwd: options.cwd,
         requestedModel,
         serviceTier: options.serviceTier,
@@ -1224,6 +1246,7 @@ export const makeCodexSessionRuntime = (
           );
           const params = yield* buildTurnStartParams({
             threadId: providerThreadId,
+            cwd: options.cwd,
             runtimeMode: options.runtimeMode,
             ...(input.input ? { prompt: input.input } : {}),
             ...(input.attachments ? { attachments: input.attachments } : {}),

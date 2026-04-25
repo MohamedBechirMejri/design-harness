@@ -2,14 +2,13 @@ import type {
   ModelCapabilities,
   ServerProvider,
   ServerProviderAuth,
-  ServerProviderSkill,
   ServerProviderSlashCommand,
   ServerProviderModel,
   ServerProviderState,
-} from "@t3tools/contracts";
+} from "@dh/contracts";
 import { Effect, Stream } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
-import { normalizeModelSlug } from "@t3tools/shared/model";
+import { normalizeModelSlug } from "@dh/shared/model";
 import { isWindowsCommandNotFound } from "../processRunner.ts";
 
 export const DEFAULT_TIMEOUT_MS = 4_000;
@@ -133,7 +132,6 @@ export function buildServerProvider(input: {
   checkedAt: string;
   models: ReadonlyArray<ServerProviderModel>;
   slashCommands?: ReadonlyArray<ServerProviderSlashCommand>;
-  skills?: ReadonlyArray<ServerProviderSkill>;
   probe: ProviderProbeResult;
 }): ServerProvider {
   return {
@@ -147,7 +145,6 @@ export function buildServerProvider(input: {
     ...(input.probe.message ? { message: input.probe.message } : {}),
     models: input.models,
     slashCommands: [...(input.slashCommands ?? [])],
-    skills: [...(input.skills ?? [])],
   };
 }
 

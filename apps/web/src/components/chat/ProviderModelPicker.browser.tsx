@@ -1,12 +1,12 @@
-import { type ProviderKind, type ServerProvider } from "@t3tools/contracts";
-import { EnvironmentId } from "@t3tools/contracts";
+import { type ProviderKind, type ServerProvider } from "@dh/contracts";
+import { EnvironmentId } from "@dh/contracts";
 import { page, userEvent } from "vitest/browser";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render } from "vitest-browser-react";
 
 import { ProviderModelPicker } from "./ProviderModelPicker";
 import { getCustomModelOptionsByProvider } from "../../modelSelection";
-import { DEFAULT_CLIENT_SETTINGS, DEFAULT_UNIFIED_SETTINGS } from "@t3tools/contracts/settings";
+import { DEFAULT_CLIENT_SETTINGS, DEFAULT_UNIFIED_SETTINGS } from "@dh/contracts/settings";
 import { __resetLocalApiForTests } from "../../localApi";
 
 // Mock the environments/runtime module to provide a mock primary environment connection
@@ -84,7 +84,6 @@ const TEST_PROVIDERS: ReadonlyArray<ServerProvider> = [
     auth: { status: "authenticated" },
     checkedAt: new Date().toISOString(),
     slashCommands: [],
-    skills: [],
     models: [
       {
         slug: "gpt-5-codex",
@@ -121,7 +120,6 @@ const TEST_PROVIDERS: ReadonlyArray<ServerProvider> = [
     auth: { status: "authenticated" },
     checkedAt: new Date().toISOString(),
     slashCommands: [],
-    skills: [],
     models: [
       {
         slug: "claude-opus-4-6",
@@ -184,22 +182,6 @@ function buildCodexProvider(models: ServerProvider["models"]): ServerProvider {
     checkedAt: new Date().toISOString(),
     models,
     slashCommands: [],
-    skills: [],
-  };
-}
-
-function buildOpenCodeProvider(models: ServerProvider["models"]): ServerProvider {
-  return {
-    provider: "opencode",
-    enabled: true,
-    installed: true,
-    version: "1.0.0",
-    status: "ready",
-    auth: { status: "authenticated" },
-    checkedAt: new Date().toISOString(),
-    models,
-    slashCommands: [],
-    skills: [],
   };
 }
 
@@ -426,8 +408,6 @@ describe("ProviderModelPicker", () => {
         { slug: "claude-sonnet-4-6", name: "Claude Sonnet 4.6" },
       ],
       codex: [{ slug: "gpt-5-codex", name: "GPT-5 Codex" }],
-      cursor: [],
-      opencode: [],
     } as const;
     const screen = await render(
       <ProviderModelPicker
@@ -452,51 +432,6 @@ describe("ProviderModelPicker", () => {
     } finally {
       await screen.unmount();
       host.remove();
-    }
-  });
-
-  it("uses the trigger label for locked opencode rows", async () => {
-    const providers: ReadonlyArray<ServerProvider> = [
-      buildOpenCodeProvider([
-        {
-          slug: "github-copilot/claude-opus-4.5",
-          name: "Claude Opus 4.5",
-          subProvider: "GitHub Copilot",
-          shortName: "Opus 4.5",
-          isCustom: false,
-          capabilities: {
-            reasoningEffortLevels: [effort("low"), effort("medium", true), effort("high")],
-            supportsFastMode: false,
-            supportsThinkingToggle: false,
-            contextWindowOptions: [],
-            promptInjectedEffortLevels: [],
-          },
-        },
-      ]),
-    ];
-    const mounted = await mountPicker({
-      provider: "opencode",
-      model: "github-copilot/claude-opus-4.5",
-      lockedProvider: "opencode",
-      providers,
-    });
-
-    try {
-      await vi.waitFor(() => {
-        const trigger = document.querySelector<HTMLElement>(
-          '[data-chat-provider-model-picker="true"]',
-        );
-        expect(trigger?.textContent).toContain("GitHub Copilot");
-        expect(trigger?.textContent).toContain("Opus 4.5");
-      });
-
-      await page.getByRole("button").click();
-
-      await vi.waitFor(() => {
-        expect(getVisibleModelNames()).toEqual(["GitHub Copilot · Opus 4.5"]);
-      });
-    } finally {
-      await mounted.cleanup();
     }
   });
 
@@ -645,121 +580,6 @@ describe("ProviderModelPicker", () => {
         const listText = getModelPickerListText();
         expect(listText).toContain("GPT-5 Codex");
         expect(listText).not.toContain("Claude Opus 4.6");
-      });
-    } finally {
-      await mounted.cleanup();
-    }
-  });
-
-  it("matches fuzzy multi-token queries across provider and model text", async () => {
-    const providers: ReadonlyArray<ServerProvider> = [
-      buildCodexProvider([
-        {
-          slug: "gpt-5-codex",
-          name: "GPT-5 Codex",
-          isCustom: false,
-          capabilities: {
-            reasoningEffortLevels: [effort("low"), effort("medium", true), effort("high")],
-            supportsFastMode: true,
-            supportsThinkingToggle: false,
-            contextWindowOptions: [],
-            promptInjectedEffortLevels: [],
-          },
-        },
-      ]),
-      buildOpenCodeProvider([
-        {
-          slug: "github-copilot/claude-opus-4.7",
-          name: "Claude Opus 4.7",
-          subProvider: "GitHub Copilot",
-          isCustom: false,
-          capabilities: {
-            reasoningEffortLevels: [effort("low"), effort("medium", true), effort("high")],
-            supportsFastMode: false,
-            supportsThinkingToggle: false,
-            contextWindowOptions: [],
-            promptInjectedEffortLevels: [],
-          },
-        },
-      ]),
-    ];
-    const mounted = await mountPicker({
-      provider: "opencode",
-      model: "github-copilot/claude-opus-4.7",
-      lockedProvider: null,
-      providers,
-    });
-
-    try {
-      await page.getByRole("button").click();
-      await page.getByPlaceholder("Search models...").fill("coplt op");
-
-      await vi.waitFor(() => {
-        const listText = getModelPickerListText();
-        expect(listText).toContain("Claude Opus 4.7");
-        expect(listText).not.toContain("GPT-5 Codex");
-      });
-    } finally {
-      await mounted.cleanup();
-    }
-  });
-
-  it("renders each search result with its own provider branding", async () => {
-    const providers: ReadonlyArray<ServerProvider> = [
-      buildOpenCodeProvider([
-        {
-          slug: "github-copilot/claude-opus-4.7",
-          name: "Claude Opus 4.7",
-          subProvider: "GitHub Copilot",
-          isCustom: false,
-          capabilities: {
-            reasoningEffortLevels: [effort("low"), effort("medium", true), effort("high")],
-            supportsFastMode: false,
-            supportsThinkingToggle: false,
-            contextWindowOptions: [],
-            promptInjectedEffortLevels: [],
-          },
-        },
-      ]),
-      {
-        ...TEST_PROVIDERS[1]!,
-        models: [
-          {
-            slug: "claude-opus-4-6",
-            name: "Claude Opus 4.6",
-            isCustom: false,
-            capabilities: {
-              reasoningEffortLevels: [
-                effort("low"),
-                effort("medium", true),
-                effort("high"),
-                effort("max"),
-              ],
-              supportsFastMode: false,
-              supportsThinkingToggle: true,
-              contextWindowOptions: [],
-              promptInjectedEffortLevels: [],
-            },
-          },
-        ],
-      },
-    ];
-    const mounted = await mountPicker({
-      provider: "opencode",
-      model: "github-copilot/claude-opus-4.7",
-      lockedProvider: null,
-      providers,
-    });
-
-    try {
-      await page.getByRole("button").click();
-      await page.getByPlaceholder("Search models...").fill("opus");
-
-      await vi.waitFor(() => {
-        const listText = getModelPickerListText();
-        expect(listText).toContain("OpenCode · GitHub Copilot");
-        expect(listText).toContain("Claude");
-        expect(listText).not.toContain("OpenCodeClaude Opus 4.6");
       });
     } finally {
       await mounted.cleanup();

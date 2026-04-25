@@ -3,7 +3,7 @@ import {
   scopedThreadKey,
   scopeProjectRef,
   scopeThreadRef,
-} from "@t3tools/client-runtime";
+} from "@dh/client-runtime";
 import * as Schema from "effect/Schema";
 import {
   EnvironmentId,
@@ -11,7 +11,7 @@ import {
   ThreadId,
   type ModelSelection,
   type ProviderModelOptions,
-} from "@t3tools/contracts";
+} from "@dh/contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -1002,60 +1002,6 @@ describe("composerDraftStore modelSelection", () => {
     );
   });
 
-  it("keeps explicit Cursor reset overrides on the selection", () => {
-    const store = useComposerDraftStore.getState();
-
-    store.setModelSelection(
-      threadRef,
-      modelSelection("cursor", "claude-opus-4-6", {
-        reasoning: "xhigh",
-        fastMode: true,
-        thinking: false,
-      }),
-    );
-
-    store.setProviderModelOptions(threadRef, "cursor", {
-      reasoning: "medium",
-      fastMode: false,
-      thinking: true,
-    });
-
-    expect(draftFor(threadId, TEST_ENVIRONMENT_ID)?.modelSelectionByProvider.cursor).toEqual(
-      modelSelection("cursor", "claude-opus-4-6", {
-        reasoning: "medium",
-        fastMode: false,
-        thinking: true,
-      }),
-    );
-  });
-
-  it("preserves the selected Cursor model when only traits change", () => {
-    const store = useComposerDraftStore.getState();
-
-    store.setProviderModelOptions(
-      threadRef,
-      "cursor",
-      {
-        reasoning: "high",
-      },
-      {
-        model: "gpt-5.4",
-        persistSticky: true,
-      },
-    );
-
-    expect(draftFor(threadId, TEST_ENVIRONMENT_ID)?.modelSelectionByProvider.cursor).toEqual(
-      modelSelection("cursor", "gpt-5.4", {
-        reasoning: "high",
-      }),
-    );
-    expect(useComposerDraftStore.getState().stickyModelSelectionByProvider.cursor).toEqual(
-      modelSelection("cursor", "gpt-5.4", {
-        reasoning: "high",
-      }),
-    );
-  });
-
   it("updates only the draft when sticky persistence is omitted", () => {
     const store = useComposerDraftStore.getState();
 
@@ -1228,24 +1174,6 @@ describe("composerDraftStore sticky composer settings", () => {
     expect(useComposerDraftStore.getState().stickyActiveProvider).toBe("codex");
   });
 
-  it("drops empty cursor model options when normalizing sticky state", () => {
-    const store = useComposerDraftStore.getState();
-
-    store.setStickyModelSelection(
-      modelSelection("cursor", "gpt-5.4", {
-        reasoning: undefined,
-        fastMode: undefined,
-        thinking: undefined,
-        contextWindow: undefined,
-      }),
-    );
-
-    expect(useComposerDraftStore.getState().stickyModelSelectionByProvider.cursor).toEqual(
-      modelSelection("cursor", "gpt-5.4"),
-    );
-    expect(useComposerDraftStore.getState().stickyActiveProvider).toBe("cursor");
-  });
-
   it("applies sticky activeProvider to new drafts", () => {
     const store = useComposerDraftStore.getState();
     const threadId = ThreadId.make("thread-sticky-active-provider");
@@ -1308,16 +1236,16 @@ describe("composerDraftStore runtime and interaction settings", () => {
   it("stores interaction mode overrides in the composer draft", () => {
     const store = useComposerDraftStore.getState();
 
-    store.setInteractionMode(threadRef, "plan");
+    store.setInteractionMode(threadRef, "design");
 
-    expect(draftFor(threadId, TEST_ENVIRONMENT_ID)?.interactionMode).toBe("plan");
+    expect(draftFor(threadId, TEST_ENVIRONMENT_ID)?.interactionMode).toBe("design");
   });
 
   it("removes empty settings-only drafts when overrides are cleared", () => {
     const store = useComposerDraftStore.getState();
 
     store.setRuntimeMode(threadRef, "approval-required");
-    store.setInteractionMode(threadRef, "plan");
+    store.setInteractionMode(threadRef, "design");
     store.setRuntimeMode(threadRef, null);
     store.setInteractionMode(threadRef, null);
 

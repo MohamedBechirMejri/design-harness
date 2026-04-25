@@ -2,11 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import type {
-  OrchestrationReadModel,
-  ProviderRuntimeEvent,
-  ProviderSession,
-} from "@t3tools/contracts";
+import type { OrchestrationReadModel, ProviderRuntimeEvent, ProviderSession } from "@dh/contracts";
 import {
   ApprovalRequestId,
   CommandId,
@@ -18,7 +14,7 @@ import {
   type ServerSettings,
   ThreadId,
   TurnId,
-} from "@t3tools/contracts";
+} from "@dh/contracts";
 import { Effect, Exit, Layer, ManagedRuntime, PubSub, Scope, Stream } from "effect";
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -730,7 +726,7 @@ describe("ProviderRuntimeIngestion", () => {
     harness.emit({
       type: "item.completed",
       eventId: asEventId("evt-tool-completed-with-data"),
-      provider: "cursor",
+      provider: "claudeAgent",
       createdAt: now,
       threadId: asThreadId("thread-1"),
       turnId: asTurnId("turn-tool-completed"),
@@ -786,7 +782,7 @@ describe("ProviderRuntimeIngestion", () => {
     harness.emit({
       type: "item.completed",
       eventId: asEventId("evt-command-completed"),
-      provider: "cursor",
+      provider: "claudeAgent",
       createdAt: now,
       threadId: asThreadId("thread-1"),
       turnId: asTurnId("turn-command-completed"),
@@ -828,7 +824,7 @@ describe("ProviderRuntimeIngestion", () => {
     harness.emit({
       type: "item.completed",
       eventId: asEventId("evt-read-path-completed"),
-      provider: "cursor",
+      provider: "claudeAgent",
       createdAt: now,
       threadId: asThreadId("thread-1"),
       turnId: asTurnId("turn-read-path"),
@@ -912,7 +908,7 @@ describe("ProviderRuntimeIngestion", () => {
           provider: "codex",
           model: "gpt-5-codex",
         },
-        interactionMode: "plan",
+        interactionMode: "default",
         runtimeMode: "approval-required",
         branch: null,
         worktreePath: null,
@@ -1099,7 +1095,7 @@ describe("ProviderRuntimeIngestion", () => {
           provider: "codex",
           model: "gpt-5-codex",
         },
-        interactionMode: "plan",
+        interactionMode: "default",
         runtimeMode: "approval-required",
         branch: null,
         worktreePath: null,
@@ -1252,7 +1248,7 @@ describe("ProviderRuntimeIngestion", () => {
           provider: "codex",
           model: "gpt-5-codex",
         },
-        interactionMode: "plan",
+        interactionMode: "default",
         runtimeMode: "approval-required",
         branch: null,
         worktreePath: null,
@@ -2818,7 +2814,7 @@ describe("ProviderRuntimeIngestion", () => {
         : undefined;
 
     expect(started?.kind).toBe("task.started");
-    expect(started?.summary).toBe("Plan task started");
+    expect(started?.summary).toBe("plan task started");
     expect(progress?.kind).toBe("task.progress");
     expect(progressPayload?.detail).toBe("Code reviewer is validating the desktop rollout chunks.");
     expect(progressPayload?.summary).toBe(

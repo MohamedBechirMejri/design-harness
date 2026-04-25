@@ -5,7 +5,7 @@ import type {
   GitStatusRemoteResult,
   GitStatusResult,
   GitStatusStreamEvent,
-} from "@t3tools/contracts";
+} from "@dh/contracts";
 import { describe } from "vitest";
 
 import { GitStatusBroadcaster } from "../Services/GitStatusBroadcaster.ts";
@@ -30,7 +30,6 @@ const baseRemoteStatus: GitStatusRemoteResult = {
   hasUpstream: true,
   aheadCount: 0,
   behindCount: 0,
-  pr: null,
 };
 
 const baseStatus: GitStatusResult = {
@@ -67,10 +66,6 @@ function makeTestLayer(state: {
         state.remoteInvalidationCalls += 1;
       }),
     invalidateStatus: () => Effect.die("invalidateStatus should not be called in this test"),
-    resolvePullRequest: () => Effect.die("resolvePullRequest should not be called in this test"),
-    preparePullRequestThread: () =>
-      Effect.die("preparePullRequestThread should not be called in this test"),
-    runStackedAction: () => Effect.die("runStackedAction should not be called in this test"),
   };
 
   return GitStatusBroadcasterLive.pipe(Layer.provide(Layer.succeed(GitManager, gitManager)));
@@ -264,11 +259,6 @@ describe("GitStatusBroadcasterLive", () => {
               state.remoteInvalidationCalls += 1;
             }),
           invalidateStatus: () => Effect.die("invalidateStatus should not be called in this test"),
-          resolvePullRequest: () =>
-            Effect.die("resolvePullRequest should not be called in this test"),
-          preparePullRequestThread: () =>
-            Effect.die("preparePullRequestThread should not be called in this test"),
-          runStackedAction: () => Effect.die("runStackedAction should not be called in this test"),
         } satisfies GitManagerShape),
       ),
     );

@@ -1,5 +1,5 @@
-import { type ServerLifecycleWelcomePayload } from "@t3tools/contracts";
-import { scopedProjectKey, scopeProjectRef } from "@t3tools/client-runtime";
+import { type ServerLifecycleWelcomePayload } from "@dh/contracts";
+import { scopedProjectKey, scopeProjectRef } from "@dh/client-runtime";
 import {
   Outlet,
   createRootRouteWithContext,
@@ -81,10 +81,6 @@ function RootRouteView() {
       window.cancelAnimationFrame(frame);
     };
   }, [pathname]);
-
-  if (pathname === "/pair") {
-    return <Outlet />;
-  }
 
   if (authGateState.status !== "authenticated") {
     return <Outlet />;

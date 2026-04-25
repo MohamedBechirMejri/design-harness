@@ -121,7 +121,6 @@ export const CanonicalItemType = Schema.Literals([
   "user_message",
   "assistant_message",
   "reasoning",
-  "plan",
   ...TOOL_LIFECYCLE_ITEM_TYPES,
   "review_entered",
   "review_exited",

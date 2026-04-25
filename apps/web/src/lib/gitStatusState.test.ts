@@ -1,4 +1,4 @@
-import { EnvironmentId, type GitStatusResult } from "@t3tools/contracts";
+import { EnvironmentId, type GitStatusResult } from "@dh/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { WsRpcClient } from "../rpc/wsRpcClient";
@@ -49,7 +49,6 @@ const BASE_STATUS: GitStatusResult = {
   hasUpstream: true,
   aheadCount: 0,
   behindCount: 0,
-  pr: null,
 };
 
 const gitClient = {

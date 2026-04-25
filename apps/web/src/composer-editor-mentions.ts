@@ -13,16 +13,11 @@ export type ComposerPromptSegment =
       path: string;
     }
   | {
-      type: "skill";
-      name: string;
-    }
-  | {
       type: "terminal-context";
       context: TerminalContextDraft | null;
     };
 
 const MENTION_TOKEN_REGEX = /(^|\s)@([^\s@]+)(?=\s)/g;
-const SKILL_TOKEN_REGEX = /(^|\s)\$([a-zA-Z][a-zA-Z0-9:_-]*)(?=\s)/g;
 
 function rangeIncludesIndex(start: number, end: number, index: number): boolean {
   return start <= index && index < end;
@@ -38,22 +33,14 @@ function pushTextSegment(segments: ComposerPromptSegment[], text: string): void 
   segments.push({ type: "text", text });
 }
 
-type InlineTokenMatch =
-  | {
-      type: "mention";
-      value: string;
-      start: number;
-      end: number;
-    }
-  | {
-      type: "skill";
-      value: string;
-      start: number;
-      end: number;
-    };
+interface MentionMatch {
+  value: string;
+  start: number;
+  end: number;
+}
 
-function collectInlineTokenMatches(text: string): InlineTokenMatch[] {
-  const matches: InlineTokenMatch[] = [];
+function collectMentionMatches(text: string): MentionMatch[] {
+  const matches: MentionMatch[] = [];
 
   for (const match of text.matchAll(MENTION_TOKEN_REGEX)) {
     const fullMatch = match[0];
@@ -63,19 +50,7 @@ function collectInlineTokenMatches(text: string): InlineTokenMatch[] {
     const start = matchIndex + prefix.length;
     const end = start + fullMatch.length - prefix.length;
     if (path.length > 0) {
-      matches.push({ type: "mention", value: path, start, end });
-    }
-  }
-
-  for (const match of text.matchAll(SKILL_TOKEN_REGEX)) {
-    const fullMatch = match[0];
-    const prefix = match[1] ?? "";
-    const skillName = match[2] ?? "";
-    const matchIndex = match.index ?? 0;
-    const start = matchIndex + prefix.length;
-    const end = start + fullMatch.length - prefix.length;
-    if (skillName.length > 0) {
-      matches.push({ type: "skill", value: skillName, start, end });
+      matches.push({ value: path, start, end });
     }
   }
 
@@ -166,7 +141,7 @@ function splitPromptTextIntoComposerSegments(text: string): ComposerPromptSegmen
     return segments;
   }
 
-  const tokenMatches = collectInlineTokenMatches(text);
+  const tokenMatches = collectMentionMatches(text);
   let cursor = 0;
   for (const match of tokenMatches) {
     if (match.start < cursor) {
@@ -177,11 +152,7 @@ function splitPromptTextIntoComposerSegments(text: string): ComposerPromptSegmen
       pushTextSegment(segments, text.slice(cursor, match.start));
     }
 
-    if (match.type === "mention") {
-      segments.push({ type: "mention", path: match.value });
-    } else {
-      segments.push({ type: "skill", name: match.value });
-    }
+    segments.push({ type: "mention", path: match.value });
 
     cursor = match.end;
   }

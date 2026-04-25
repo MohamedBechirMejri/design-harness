@@ -1,5 +1,4 @@
-import type { DesktopEnvironmentBootstrap } from "@t3tools/contracts";
-import type { KnownEnvironment } from "@t3tools/client-runtime";
+import type { KnownEnvironment } from "@dh/client-runtime";
 
 export interface PrimaryEnvironmentTarget {
   readonly source: KnownEnvironment["source"];
@@ -7,10 +6,6 @@ export interface PrimaryEnvironmentTarget {
 }
 
 const LOOPBACK_HOSTNAMES = new Set(["127.0.0.1", "::1", "localhost"]);
-
-function getDesktopLocalEnvironmentBootstrap(): DesktopEnvironmentBootstrap | null {
-  return window.desktopBridge?.getLocalEnvironmentBootstrap() ?? null;
-}
 
 function normalizeBaseUrl(rawValue: string): string {
   return new URL(rawValue, window.location.origin).toString();
@@ -109,29 +104,6 @@ function resolveWindowOriginPrimaryTarget(): PrimaryEnvironmentTarget {
   };
 }
 
-function resolveDesktopPrimaryTarget(): PrimaryEnvironmentTarget | null {
-  const desktopBootstrap = getDesktopLocalEnvironmentBootstrap();
-  if (!desktopBootstrap) {
-    return null;
-  }
-  if (!desktopBootstrap.httpBaseUrl && !desktopBootstrap.wsBaseUrl) {
-    return null;
-  }
-  if (!desktopBootstrap.httpBaseUrl || !desktopBootstrap.wsBaseUrl) {
-    throw new Error(
-      "Desktop bootstrap must provide both httpBaseUrl and wsBaseUrl for the local environment.",
-    );
-  }
-
-  return {
-    source: "desktop-managed",
-    target: {
-      httpBaseUrl: normalizeBaseUrl(desktopBootstrap.httpBaseUrl),
-      wsBaseUrl: normalizeBaseUrl(desktopBootstrap.wsBaseUrl),
-    },
-  };
-}
-
 export function resolvePrimaryEnvironmentHttpUrl(
   pathname: string,
   searchParams?: Record<string, string>,
@@ -150,9 +122,5 @@ export function resolvePrimaryEnvironmentHttpUrl(
 }
 
 export function readPrimaryEnvironmentTarget(): PrimaryEnvironmentTarget | null {
-  return (
-    resolveDesktopPrimaryTarget() ??
-    resolveConfiguredPrimaryTarget() ??
-    resolveWindowOriginPrimaryTarget()
-  );
+  return resolveConfiguredPrimaryTarget() ?? resolveWindowOriginPrimaryTarget();
 }

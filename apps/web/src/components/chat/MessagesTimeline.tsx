@@ -1,4 +1,4 @@
-import { type EnvironmentId, type MessageId, type TurnId } from "@t3tools/contracts";
+import { type EnvironmentId, type MessageId, type TurnId } from "@dh/contracts";
 import {
   createContext,
   memo,
@@ -31,7 +31,6 @@ import {
 } from "lucide-react";
 import { Button } from "../ui/button";
 import { buildExpandedImagePreview, ExpandedImagePreview } from "./ExpandedImagePreview";
-import { ProposedPlanCard } from "./ProposedPlanCard";
 import { DesignQuestionsCard } from "./DesignQuestionsCard";
 import { parseDesignQuestionsMessage } from "../../designQuestions";
 import { ChangedFilesTree } from "./ChangedFilesTree";
@@ -54,7 +53,7 @@ import {
 } from "~/lib/terminalContext";
 import { cn } from "~/lib/utils";
 import { useUiStateStore } from "~/uiStateStore";
-import { type TimestampFormat } from "@t3tools/contracts/settings";
+import { type TimestampFormat } from "@dh/contracts/settings";
 import { formatTimestamp } from "../../timestampFormat";
 
 import {
@@ -118,7 +117,15 @@ interface MessagesTimelineProps {
   workspaceRoot: string | undefined;
   onIsAtEndChange: (isAtEnd: boolean) => void;
   onSubmitDesignAnswers?: (compiledText: string) => void | Promise<void>;
+  onPickStarter?: (prompt: string) => void;
 }
+
+const TIMELINE_STARTER_PROMPTS = [
+  "A bookmark manager, neo-brutalist",
+  "A minimalist habit-tracker dashboard",
+  "A pricing page for a dev-tool startup",
+  "A three-screen mobile onboarding flow",
+] as const;
 
 // ---------------------------------------------------------------------------
 // MessagesTimeline — list owner
@@ -147,6 +154,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   workspaceRoot,
   onIsAtEndChange,
   onSubmitDesignAnswers,
+  onPickStarter,
 }: MessagesTimelineProps) {
   const rawRows = useMemo(
     () =>
@@ -246,10 +254,29 @@ export const MessagesTimeline = memo(function MessagesTimeline({
 
   if (rows.length === 0 && !isWorking) {
     return (
-      <div className="flex h-full items-center justify-center">
-        <p className="text-sm text-muted-foreground/30">
-          Send a message to start the conversation.
+      <div className="flex h-full flex-col items-center justify-center gap-6 px-6 text-center">
+        <p className="font-display text-[26px] italic leading-tight text-foreground">
+          What do you want to design?
         </p>
+        {onPickStarter ? (
+          <ul className="grid w-full max-w-xl gap-2 sm:grid-cols-2">
+            {TIMELINE_STARTER_PROMPTS.map((prompt) => (
+              <li key={prompt}>
+                <button
+                  type="button"
+                  onClick={() => onPickStarter(prompt)}
+                  className="w-full rounded-xl border border-transparent bg-surface px-4 py-3 text-left text-[14px] text-foreground transition-colors hover:border-border-strong hover:bg-accent/60"
+                >
+                  <span className="font-display italic leading-snug">{prompt}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-sm text-muted-foreground/40">
+            Describe what you want, and the canvas will render it.
+          </p>
+        )}
       </div>
     );
   }
@@ -493,17 +520,6 @@ function TimelineRowContent({ row }: { row: TimelineRow }) {
             </>
           );
         })()}
-
-      {row.kind === "proposed-plan" && (
-        <div className="min-w-0 px-1 py-0.5">
-          <ProposedPlanCard
-            planMarkdown={row.proposedPlan.planMarkdown}
-            environmentId={ctx.activeThreadEnvironmentId}
-            cwd={ctx.markdownCwd}
-            workspaceRoot={ctx.workspaceRoot}
-          />
-        </div>
-      )}
 
       {row.kind === "working" && (
         <div className="py-0.5 pl-1.5">

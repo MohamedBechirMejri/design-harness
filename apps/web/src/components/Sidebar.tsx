@@ -3,14 +3,13 @@ import {
   ArrowUpDownIcon,
   ChevronRightIcon,
   CloudIcon,
-  GitPullRequestIcon,
   PlusIcon,
   SearchIcon,
   SettingsIcon,
   SquarePenIcon,
   TriangleAlertIcon,
 } from "lucide-react";
-import { prStatusIndicator, resolveThreadPr, ThreadStatusLabel } from "./ThreadStatusIndicators";
+import { ThreadStatusLabel } from "./ThreadStatusIndicators";
 import { ProjectFavicon } from "./ProjectFavicon";
 import { autoAnimate } from "@formkit/auto-animate";
 import React, { useCallback, useEffect, memo, useMemo, useRef, useState } from "react";
@@ -32,27 +31,22 @@ import { restrictToFirstScrollableAncestor, restrictToVerticalAxis } from "@dnd-
 import { CSS } from "@dnd-kit/utilities";
 import {
   type ContextMenuItem,
-  type DesktopUpdateState,
   ProjectId,
   type ScopedThreadRef,
   type SidebarProjectGroupingMode,
   type ThreadEnvMode,
   ThreadId,
-} from "@t3tools/contracts";
+} from "@dh/contracts";
 import {
   parseScopedThreadKey,
   scopedProjectKey,
   scopedThreadKey,
   scopeProjectRef,
   scopeThreadRef,
-} from "@t3tools/client-runtime";
+} from "@dh/client-runtime";
 import { Link, useLocation, useNavigate, useParams, useRouter } from "@tanstack/react-router";
-import {
-  type SidebarProjectSortOrder,
-  type SidebarThreadSortOrder,
-} from "@t3tools/contracts/settings";
+import { type SidebarProjectSortOrder, type SidebarThreadSortOrder } from "@dh/contracts/settings";
 import { usePrimaryEnvironmentId } from "../environments/primary";
-import { isElectron } from "../env";
 import { APP_STAGE_LABEL, APP_VERSION } from "../branding";
 import { isTerminalFocused } from "../lib/terminalFocus";
 import { isMacPlatform, newCommandId } from "../lib/utils";
@@ -75,7 +69,6 @@ import {
 } from "../keybindings";
 import { useModelPickerOpen } from "../modelPickerOpenState";
 import { useShortcutModifierState } from "../shortcutModifierState";
-import { useGitStatus } from "../lib/gitStatusState";
 import { readLocalApi } from "../localApi";
 import { useComposerDraftStore } from "../composerDraftStore";
 import { useNewThreadHandler } from "../hooks/useHandleNewThread";
@@ -91,16 +84,6 @@ import { toastManager } from "./ui/toast";
 import { formatRelativeTimeLabel } from "../timestampFormat";
 import { SettingsSidebarNav } from "./settings/SettingsSidebarNav";
 import { Kbd } from "./ui/kbd";
-import {
-  getArm64IntelBuildWarningDescription,
-  getDesktopUpdateActionError,
-  getDesktopUpdateInstallConfirmationMessage,
-  isDesktopUpdateButtonDisabled,
-  resolveDesktopUpdateButtonAction,
-  shouldShowArm64IntelBuildWarning,
-  shouldToastDesktopUpdateActionResult,
-} from "./desktopUpdate.logic";
-import { Alert, AlertAction, AlertDescription, AlertTitle } from "./ui/alert";
 import { Button } from "./ui/button";
 import {
   Dialog,
@@ -155,7 +138,6 @@ import {
   ThreadStatusPill,
 } from "./Sidebar.logic";
 import { sortThreads } from "../lib/threadSort";
-import { SidebarUpdatePill } from "./sidebar/SidebarUpdatePill";
 import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
 import { CommandDialogTrigger } from "./ui/command";
 import { readEnvironmentApi } from "../environmentApi";
@@ -166,10 +148,6 @@ import {
   deriveProjectGroupingOverrideKey,
   getProjectOrderKey,
 } from "../logicalProject";
-import {
-  useSavedEnvironmentRegistryStore,
-  useSavedEnvironmentRuntimeStore,
-} from "../environments/runtime";
 import type { SidebarThreadSummary } from "../types";
 import {
   buildPhysicalToLogicalProjectKeyMap,
@@ -284,7 +262,6 @@ interface SidebarThreadRowProps {
   ) => Promise<void>;
   cancelRename: () => void;
   attemptArchiveThread: (threadRef: ScopedThreadRef) => Promise<void>;
-  openPrLink: (event: React.MouseEvent<HTMLElement>, prUrl: string) => void;
 }
 
 const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowProps) {
@@ -309,7 +286,6 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
     commitRename,
     cancelRename,
     attemptArchiveThread,
-    openPrLink,
     thread,
   } = props;
   const threadRef = scopeThreadRef(thread.environmentId, thread.id);
@@ -317,34 +293,6 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
   const lastVisitedAt = useUiStateStore((state) => state.threadLastVisitedAtById[threadKey]);
   const isSelected = useThreadSelectionStore((state) => state.selectedThreadKeys.has(threadKey));
   const hasSelection = useThreadSelectionStore((state) => state.selectedThreadKeys.size > 0);
-  const primaryEnvironmentId = usePrimaryEnvironmentId();
-  const isRemoteThread =
-    primaryEnvironmentId !== null && thread.environmentId !== primaryEnvironmentId;
-  const remoteEnvLabel = useSavedEnvironmentRuntimeStore(
-    (s) => s.byId[thread.environmentId]?.descriptor?.label ?? null,
-  );
-  const remoteEnvSavedLabel = useSavedEnvironmentRegistryStore(
-    (s) => s.byId[thread.environmentId]?.label ?? null,
-  );
-  const threadEnvironmentLabel = isRemoteThread
-    ? (remoteEnvLabel ?? remoteEnvSavedLabel ?? "Remote")
-    : null;
-  // For grouped projects, the thread may belong to a different environment
-  // than the representative project.  Look up the thread's own project cwd
-  // so git status (and thus PR detection) queries the correct path.
-  const threadProjectCwd = useStore(
-    useMemo(
-      () => (state: import("../store").AppState) =>
-        selectProjectByRef(state, scopeProjectRef(thread.environmentId, thread.projectId))?.cwd ??
-        null,
-      [thread.environmentId, thread.projectId],
-    ),
-  );
-  const gitCwd = thread.worktreePath ?? threadProjectCwd ?? props.projectCwd;
-  const gitStatus = useGitStatus({
-    environmentId: thread.environmentId,
-    cwd: thread.branch != null ? gitCwd : null,
-  });
   const isHighlighted = isActive || isSelected;
   const isThreadRunning =
     thread.session?.status === "running" && thread.session.activeTurnId != null;
@@ -354,8 +302,6 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
       lastVisitedAt,
     },
   });
-  const pr = resolveThreadPr(thread.branch, gitStatus.data);
-  const prStatus = prStatusIndicator(pr);
   const isConfirmingArchive = confirmingArchiveThreadKey === threadKey && !isThreadRunning;
   const threadMetaClassName = isConfirmingArchive
     ? "pointer-events-none opacity-0"
@@ -421,13 +367,6 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
       isSelected,
       threadRef,
     ],
-  );
-  const handlePrClick = useCallback(
-    (event: React.MouseEvent<HTMLButtonElement>) => {
-      if (!prStatus) return;
-      openPrLink(event, prStatus.url);
-    },
-    [openPrLink, prStatus],
   );
   const handleRenameInputRef = useCallback(
     (element: HTMLInputElement | null) => {
@@ -535,23 +474,6 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
         onContextMenu={handleRowContextMenu}
       >
         <div className="flex min-w-0 flex-1 items-center gap-1.5 text-left">
-          {prStatus && (
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <button
-                    type="button"
-                    aria-label={prStatus.tooltip}
-                    className={`inline-flex items-center justify-center ${prStatus.colorClass} cursor-pointer rounded-sm outline-hidden focus-visible:ring-1 focus-visible:ring-ring`}
-                    onClick={handlePrClick}
-                  >
-                    <GitPullRequestIcon className="size-3" />
-                  </button>
-                }
-              />
-              <TooltipPopup side="top">{prStatus.tooltip}</TooltipPopup>
-            </Tooltip>
-          )}
           {threadStatus && <ThreadStatusLabel status={threadStatus} />}
           {renamingThreadKey === threadKey ? (
             <input
@@ -636,21 +558,6 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThreadRowP
             ) : null}
             <span className={threadMetaClassName}>
               <span className="inline-flex items-center gap-1">
-                {isRemoteThread && (
-                  <Tooltip>
-                    <TooltipTrigger
-                      render={
-                        <span
-                          aria-label={threadEnvironmentLabel ?? "Remote"}
-                          className="inline-flex items-center justify-center"
-                        />
-                      }
-                    >
-                      <CloudIcon className="size-3 text-muted-foreground/40" />
-                    </TooltipTrigger>
-                    <TooltipPopup side="top">{threadEnvironmentLabel}</TooltipPopup>
-                  </Tooltip>
-                )}
                 {jumpLabel ? (
                   <span
                     className="inline-flex h-5 items-center rounded-full border border-border/80 bg-background/90 px-1.5 font-mono text-[10px] font-medium tracking-tight text-foreground shadow-sm"
@@ -722,7 +629,6 @@ interface SidebarProjectThreadListProps {
   ) => Promise<void>;
   cancelRename: () => void;
   attemptArchiveThread: (threadRef: ScopedThreadRef) => Promise<void>;
-  openPrLink: (event: React.MouseEvent<HTMLElement>, prUrl: string) => void;
   expandThreadListForProject: (projectKey: string) => void;
   collapseThreadListForProject: (projectKey: string) => void;
 }
@@ -761,7 +667,6 @@ const SidebarProjectThreadList = memo(function SidebarProjectThreadList(
     commitRename,
     cancelRename,
     attemptArchiveThread,
-    openPrLink,
     expandThreadListForProject,
     collapseThreadListForProject,
   } = props;
@@ -811,7 +716,6 @@ const SidebarProjectThreadList = memo(function SidebarProjectThreadList(
               commitRename={commitRename}
               cancelRename={cancelRename}
               attemptArchiveThread={attemptArchiveThread}
-              openPrLink={openPrLink}
             />
           );
         })}
@@ -953,27 +857,6 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
       });
     },
   });
-  const openPrLink = useCallback((event: React.MouseEvent<HTMLElement>, prUrl: string) => {
-    event.preventDefault();
-    event.stopPropagation();
-
-    const api = readLocalApi();
-    if (!api) {
-      toastManager.add({
-        type: "error",
-        title: "Link opening is unavailable.",
-      });
-      return;
-    }
-
-    void api.shell.openExternal(prUrl).catch((error) => {
-      toastManager.add({
-        type: "error",
-        title: "Unable to open PR link",
-        description: error instanceof Error ? error.message : "An error occurred.",
-      });
-    });
-  }, []);
   const sidebarThreads = useStore(
     useShallow(
       useMemo(
@@ -2029,7 +1912,6 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
         commitRename={commitRename}
         cancelRename={cancelRename}
         attemptArchiveThread={attemptArchiveThread}
-        openPrLink={openPrLink}
         expandThreadListForProject={expandThreadListForProject}
         collapseThreadListForProject={collapseThreadListForProject}
       />
@@ -2166,7 +2048,7 @@ const SidebarProjectListRow = memo(function SidebarProjectListRow(props: Sidebar
 function T3Wordmark() {
   return (
     <svg
-      aria-label="T3"
+      aria-label="Design Harness"
       className="h-2.5 w-auto shrink-0 text-foreground"
       viewBox="15.5309 37 94.3941 56.96"
       xmlns="http://www.w3.org/2000/svg"
@@ -2316,45 +2198,35 @@ function SortableProjectItem({
   );
 }
 
-const SidebarChromeHeader = memo(function SidebarChromeHeader({
-  isElectron,
-}: {
-  isElectron: boolean;
-}) {
-  const wordmark = (
-    <div className="flex items-center gap-2">
-      <SidebarTrigger className="shrink-0 md:hidden" />
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <Link
-              aria-label="Go to threads"
-              className="ml-1 flex min-w-0 flex-1 cursor-pointer items-center gap-1 rounded-md outline-hidden ring-ring transition-colors hover:text-foreground focus-visible:ring-2"
-              to="/"
-            >
-              <T3Wordmark />
-              <span className="truncate text-sm font-medium tracking-tight text-pink-400/90">
-                design
-              </span>
-              <span className="rounded-full bg-muted/50 px-1.5 py-0.5 text-[8px] font-medium uppercase tracking-[0.18em] text-muted-foreground/60">
-                {APP_STAGE_LABEL}
-              </span>
-            </Link>
-          }
-        />
-        <TooltipPopup side="bottom" sideOffset={2}>
-          Version {APP_VERSION}
-        </TooltipPopup>
-      </Tooltip>
-    </div>
-  );
-
-  return isElectron ? (
-    <SidebarHeader className="drag-region h-[52px] flex-row items-center gap-2 px-4 py-0 pl-[90px] wco:h-[env(titlebar-area-height)] wco:pl-[calc(env(titlebar-area-x)+1em)]">
-      {wordmark}
+const SidebarChromeHeader = memo(function SidebarChromeHeader() {
+  return (
+    <SidebarHeader className="gap-3 px-3 py-2 sm:gap-2.5 sm:px-4 sm:py-3">
+      <div className="flex items-center gap-2">
+        <SidebarTrigger className="shrink-0 md:hidden" />
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Link
+                aria-label="Go to threads"
+                className="ml-1 flex min-w-0 flex-1 cursor-pointer items-center gap-1 rounded-md outline-hidden ring-ring transition-colors hover:text-foreground focus-visible:ring-2"
+                to="/"
+              >
+                <T3Wordmark />
+                <span className="truncate text-sm font-medium tracking-tight text-pink-400/90">
+                  design
+                </span>
+                <span className="rounded-full bg-muted/50 px-1.5 py-0.5 text-[8px] font-medium uppercase tracking-[0.18em] text-muted-foreground/60">
+                  {APP_STAGE_LABEL}
+                </span>
+              </Link>
+            }
+          />
+          <TooltipPopup side="bottom" sideOffset={2}>
+            Version {APP_VERSION}
+          </TooltipPopup>
+        </Tooltip>
+      </div>
     </SidebarHeader>
-  ) : (
-    <SidebarHeader className="gap-3 px-3 py-2 sm:gap-2.5 sm:px-4 sm:py-3">{wordmark}</SidebarHeader>
   );
 });
 
@@ -2366,7 +2238,6 @@ const SidebarChromeFooter = memo(function SidebarChromeFooter() {
 
   return (
     <SidebarFooter className="p-2">
-      <SidebarUpdatePill />
       <SidebarMenu>
         <SidebarMenuItem>
           <SidebarMenuButton
@@ -2384,11 +2255,6 @@ const SidebarChromeFooter = memo(function SidebarChromeFooter() {
 });
 
 interface SidebarProjectsContentProps {
-  showArm64IntelBuildWarning: boolean;
-  arm64IntelBuildWarningDescription: string | null;
-  desktopUpdateButtonAction: "download" | "install" | "none";
-  desktopUpdateButtonDisabled: boolean;
-  handleDesktopUpdateButtonClick: () => void;
   projectSortOrder: SidebarProjectSortOrder;
   threadSortOrder: SidebarThreadSortOrder;
   projectGroupingMode: SidebarProjectGroupingMode;
@@ -2424,11 +2290,6 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
   props: SidebarProjectsContentProps,
 ) {
   const {
-    showArm64IntelBuildWarning,
-    arm64IntelBuildWarningDescription,
-    desktopUpdateButtonAction,
-    desktopUpdateButtonDisabled,
-    handleDesktopUpdateButtonClick,
     projectSortOrder,
     threadSortOrder,
     projectGroupingMode,
@@ -2504,29 +2365,6 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarGroup>
-      {showArm64IntelBuildWarning && arm64IntelBuildWarningDescription ? (
-        <SidebarGroup className="px-2 pt-2 pb-0">
-          <Alert variant="warning" className="rounded-2xl border-warning/40 bg-warning/8">
-            <TriangleAlertIcon />
-            <AlertTitle>Intel build on Apple Silicon</AlertTitle>
-            <AlertDescription>{arm64IntelBuildWarningDescription}</AlertDescription>
-            {desktopUpdateButtonAction !== "none" ? (
-              <AlertAction>
-                <Button
-                  size="xs"
-                  variant="outline"
-                  disabled={desktopUpdateButtonDisabled}
-                  onClick={handleDesktopUpdateButtonClick}
-                >
-                  {desktopUpdateButtonAction === "download"
-                    ? "Download ARM build"
-                    : "Install ARM build"}
-                </Button>
-              </AlertAction>
-            ) : null}
-          </Alert>
-        </SidebarGroup>
-      ) : null}
       <SidebarGroup className="px-2 py-2">
         <div className="mb-1 flex items-center justify-between pl-2 pr-1.5">
           <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
@@ -2676,7 +2514,6 @@ export default function Sidebar() {
   const dragInProgressRef = useRef(false);
   const suppressProjectClickAfterDragRef = useRef(false);
   const suppressProjectClickForContextMenuRef = useRef(false);
-  const [desktopUpdateState, setDesktopUpdateState] = useState<DesktopUpdateState | null>(null);
   const selectedThreadCount = useThreadSelectionStore((s) => s.selectedThreadKeys.size);
   const clearSelection = useThreadSelectionStore((s) => s.clearSelection);
   const setSelectionAnchor = useThreadSelectionStore((s) => s.setAnchor);
@@ -2684,8 +2521,6 @@ export default function Sidebar() {
   const shortcutModifiers = useShortcutModifierState();
   const modelPickerOpen = useModelPickerOpen();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
-  const savedEnvironmentRegistry = useSavedEnvironmentRegistryStore((s) => s.byId);
-  const savedEnvironmentRuntimeById = useSavedEnvironmentRuntimeStore((s) => s.byId);
   const orderedProjects = useMemo(() => {
     return orderItemsByPreferredIds({
       items: projects,
@@ -2719,19 +2554,9 @@ export default function Sidebar() {
       projects: orderedProjects,
       settings: projectGroupingSettings,
       primaryEnvironmentId,
-      resolveEnvironmentLabel: (environmentId) => {
-        const rt = savedEnvironmentRuntimeById[environmentId];
-        const saved = savedEnvironmentRegistry[environmentId];
-        return rt?.descriptor?.label ?? saved?.label ?? null;
-      },
+      resolveEnvironmentLabel: () => null,
     });
-  }, [
-    orderedProjects,
-    projectGroupingSettings,
-    primaryEnvironmentId,
-    savedEnvironmentRegistry,
-    savedEnvironmentRuntimeById,
-  ]);
+  }, [orderedProjects, projectGroupingSettings, primaryEnvironmentId]);
 
   const sidebarProjectByKey = useMemo(
     () => new Map(sidebarProjects.map((project) => [project.projectKey, project] as const)),
@@ -3121,115 +2946,11 @@ export default function Sidebar() {
     };
   }, [clearSelection, selectedThreadCount]);
 
-  useEffect(() => {
-    if (!isElectron) return;
-    const bridge = window.desktopBridge;
-    if (
-      !bridge ||
-      typeof bridge.getUpdateState !== "function" ||
-      typeof bridge.onUpdateState !== "function"
-    ) {
-      return;
-    }
-
-    let disposed = false;
-    let receivedSubscriptionUpdate = false;
-    const unsubscribe = bridge.onUpdateState((nextState) => {
-      if (disposed) return;
-      receivedSubscriptionUpdate = true;
-      setDesktopUpdateState(nextState);
-    });
-
-    void bridge
-      .getUpdateState()
-      .then((nextState) => {
-        if (disposed || receivedSubscriptionUpdate) return;
-        setDesktopUpdateState(nextState);
-      })
-      .catch(() => undefined);
-
-    return () => {
-      disposed = true;
-      unsubscribe();
-    };
-  }, []);
-
-  const desktopUpdateButtonDisabled = isDesktopUpdateButtonDisabled(desktopUpdateState);
-  const desktopUpdateButtonAction = desktopUpdateState
-    ? resolveDesktopUpdateButtonAction(desktopUpdateState)
-    : "none";
-  const showArm64IntelBuildWarning =
-    isElectron && shouldShowArm64IntelBuildWarning(desktopUpdateState);
-  const arm64IntelBuildWarningDescription =
-    desktopUpdateState && showArm64IntelBuildWarning
-      ? getArm64IntelBuildWarningDescription(desktopUpdateState)
-      : null;
   const commandPaletteShortcutLabel = shortcutLabelForCommand(
     keybindings,
     "commandPalette.toggle",
     newThreadShortcutLabelOptions,
   );
-  const handleDesktopUpdateButtonClick = useCallback(() => {
-    const bridge = window.desktopBridge;
-    if (!bridge || !desktopUpdateState) return;
-    if (desktopUpdateButtonDisabled || desktopUpdateButtonAction === "none") return;
-
-    if (desktopUpdateButtonAction === "download") {
-      void bridge
-        .downloadUpdate()
-        .then((result) => {
-          if (result.completed) {
-            toastManager.add({
-              type: "success",
-              title: "Update downloaded",
-              description: "Restart the app from the update button to install it.",
-            });
-          }
-          if (!shouldToastDesktopUpdateActionResult(result)) return;
-          const actionError = getDesktopUpdateActionError(result);
-          if (!actionError) return;
-          toastManager.add({
-            type: "error",
-            title: "Could not download update",
-            description: actionError,
-          });
-        })
-        .catch((error) => {
-          toastManager.add({
-            type: "error",
-            title: "Could not start update download",
-            description: error instanceof Error ? error.message : "An unexpected error occurred.",
-          });
-        });
-      return;
-    }
-
-    if (desktopUpdateButtonAction === "install") {
-      const confirmed = window.confirm(
-        getDesktopUpdateInstallConfirmationMessage(desktopUpdateState),
-      );
-      if (!confirmed) return;
-      void bridge
-        .installUpdate()
-        .then((result) => {
-          if (!shouldToastDesktopUpdateActionResult(result)) return;
-          const actionError = getDesktopUpdateActionError(result);
-          if (!actionError) return;
-          toastManager.add({
-            type: "error",
-            title: "Could not install update",
-            description: actionError,
-          });
-        })
-        .catch((error) => {
-          toastManager.add({
-            type: "error",
-            title: "Could not install update",
-            description: error instanceof Error ? error.message : "An unexpected error occurred.",
-          });
-        });
-    }
-  }, [desktopUpdateButtonAction, desktopUpdateButtonDisabled, desktopUpdateState]);
 
   const expandThreadListForProject = useCallback((projectKey: string) => {
     setExpandedThreadListsByProject((current) => {
@@ -3251,18 +2972,13 @@ export default function Sidebar() {
 
   return (
     <>
-      <SidebarChromeHeader isElectron={isElectron} />
+      <SidebarChromeHeader />
 
       {isOnSettings ? (
         <SettingsSidebarNav pathname={pathname} />
       ) : (
         <>
           <SidebarProjectsContent
-            showArm64IntelBuildWarning={showArm64IntelBuildWarning}
-            arm64IntelBuildWarningDescription={arm64IntelBuildWarningDescription}
-            desktopUpdateButtonAction={desktopUpdateButtonAction}
-            desktopUpdateButtonDisabled={desktopUpdateButtonDisabled}
-            handleDesktopUpdateButtonClick={handleDesktopUpdateButtonClick}
             projectSortOrder={sidebarProjectSortOrder}
             threadSortOrder={sidebarThreadSortOrder}
             projectGroupingMode={sidebarProjectGroupingMode}

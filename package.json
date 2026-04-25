@@ -1,5 +1,5 @@
 {
-  "name": "@t3tools/monorepo",
+  "name": "@dh/monorepo",
   "private": true,
   "workspaces": {
     "packages": [
@@ -29,14 +29,14 @@
     "dev": "node scripts/dev-runner.ts dev",
     "dev:server": "node scripts/dev-runner.ts dev:server",
     "dev:web": "node scripts/dev-runner.ts dev:web",
-    "start": "turbo run start --filter=t3",
+    "start": "turbo run start --filter=dh",
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
     "lint": "oxlint --report-unused-disable-directives",
     "test": "turbo run test",
     "fmt": "oxfmt",
     "fmt:check": "oxfmt --check",
-    "build:contracts": "turbo run build --filter=@t3tools/contracts",
+    "build:contracts": "turbo run build --filter=@dh/contracts",
     "clean": "rm -rf node_modules apps/*/node_modules packages/*/node_modules apps/*/dist packages/*/dist .turbo apps/*/.turbo packages/*/.turbo",
     "sync:vscode-icons": "node scripts/sync-vscode-icons.mjs"
   },

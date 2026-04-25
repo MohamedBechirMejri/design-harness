@@ -11,12 +11,12 @@ import type {
   ServerProvider,
   ThreadId,
   TurnId,
-} from "@t3tools/contracts";
+} from "@dh/contracts";
 import {
   PROVIDER_SEND_TURN_MAX_ATTACHMENTS,
   PROVIDER_SEND_TURN_MAX_IMAGE_BYTES,
-} from "@t3tools/contracts";
-import { createModelSelection, normalizeModelSlug } from "@t3tools/shared/model";
+} from "@dh/contracts";
+import { createModelSelection, normalizeModelSlug } from "@dh/shared/model";
 import {
   forwardRef,
   memo,
@@ -66,7 +66,6 @@ import { CompactComposerControlsMenu } from "./CompactComposerControlsMenu";
 import { ComposerPrimaryActions } from "./ComposerPrimaryActions";
 import { ComposerPendingApprovalPanel } from "./ComposerPendingApprovalPanel";
 import { ComposerPendingUserInputPanel } from "./ComposerPendingUserInputPanel";
-import { ComposerPlanFollowUpBanner } from "./ComposerPlanFollowUpBanner";
 import { resolveComposerMenuActiveItemId } from "./composerMenuHighlight";
 import { searchSlashCommandItems } from "./composerSlashCommandSearch";
 import {
@@ -83,15 +82,12 @@ import { Separator } from "../ui/separator";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { toastManager } from "../ui/toast";
 import { CircleAlertIcon, XIcon } from "lucide-react";
-import { proposedPlanTitle } from "../../proposedPlan";
 import { resolveSelectableProvider, getProviderModels } from "../../providerModels";
-import type { UnifiedSettings } from "@t3tools/contracts/settings";
+import type { UnifiedSettings } from "@dh/contracts/settings";
 import type { SessionPhase, Thread } from "../../types";
 import type { PendingUserInputDraftAnswer } from "../../pendingUserInput";
 import type { PendingApproval, PendingUserInput } from "../../session-logic";
 import { deriveLatestContextWindowSnapshot } from "../../lib/contextWindow";
-import { formatProviderSkillDisplayName } from "../../providerSkillPresentation";
-import { searchProviderSkills } from "../../providerSkillSearch";
 
 const IMAGE_SIZE_LIMIT_LABEL = `${Math.round(PROVIDER_SEND_TURN_MAX_IMAGE_BYTES / (1024 * 1024))}MB`;
 
@@ -138,34 +134,32 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
     isComplete: boolean;
   } | null;
   isRunning: boolean;
-  showPlanFollowUpPrompt: boolean;
-  promptHasText: boolean;
   isSendBusy: boolean;
   isConnecting: boolean;
+  isInterrupting: boolean;
   hasSendableContent: boolean;
   onPreviousPendingQuestion: () => void;
   onInterrupt: () => void;
-  onImplementPlanInNewThread: () => void;
 }) {
   return (
     <>
       {props.activeContextWindow ? <ContextWindowMeter usage={props.activeContextWindow} /> : null}
       {props.isPreparingWorktree ? (
         <span className="text-muted-foreground/70 text-xs">Preparing worktree...</span>
+      ) : props.isInterrupting ? (
+        <span className="text-muted-foreground/70 text-xs">Stopping…</span>
       ) : null}
       <ComposerPrimaryActions
         compact={props.compact}
         pendingAction={props.pendingAction}
         isRunning={props.isRunning}
-        showPlanFollowUpPrompt={props.showPlanFollowUpPrompt}
-        promptHasText={props.promptHasText}
         isSendBusy={props.isSendBusy}
         isConnecting={props.isConnecting}
         isPreparingWorktree={props.isPreparingWorktree}
+        isInterrupting={props.isInterrupting}
         hasSendableContent={props.hasSendableContent}
         onPreviousPendingQuestion={props.onPreviousPendingQuestion}
         onInterrupt={props.onInterrupt}
-        onImplementPlanInNewThread={props.onImplementPlanInNewThread}
       />
     </>
   );
@@ -250,12 +244,7 @@ export interface ChatComposerProps {
   activePendingQuestionIndex: number;
   respondingRequestIds: ApprovalRequestId[];
 
-  // Plan (design-only build: these still ride through for plan-style
-  // follow-ups but the visible plan sidebar is gone)
-  showPlanFollowUpPrompt: boolean;
-  activeProposedPlan: Thread["proposedPlans"][number] | null;
   activePlan: { turnId?: TurnId } | null;
-  sidebarProposedPlan: { turnId?: TurnId } | null;
 
   // Provider / model
   lockedProvider: ProviderKind | null;
@@ -285,7 +274,6 @@ export interface ChatComposerProps {
   // Callbacks
   onSend: (e?: { preventDefault: () => void }) => void;
   onInterrupt: () => void;
-  onImplementPlanInNewThread: () => void;
   onRespondToApproval: (
     requestId: ApprovalRequestId,
     decision: ProviderApprovalDecision,
@@ -340,8 +328,6 @@ export const ChatComposer = memo(
       activePendingDraftAnswers,
       activePendingQuestionIndex,
       respondingRequestIds,
-      showPlanFollowUpPrompt,
-      activeProposedPlan,
       lockedProvider,
       providerStatuses,
       activeProjectDefaultModelSelection,
@@ -359,7 +345,6 @@ export const ChatComposer = memo(
       scheduleStickToBottom,
       onSend,
       onInterrupt,
-      onImplementPlanInNewThread,
       onRespondToApproval,
       onSelectActivePendingUserInputOption,
       onAdvanceActivePendingUserInput,
@@ -457,9 +442,6 @@ export const ChatComposer = memo(
         codex: providerStatuses.find((provider) => provider.provider === "codex")?.models ?? [],
         claudeAgent:
           providerStatuses.find((provider) => provider.provider === "claudeAgent")?.models ?? [],
-        opencode:
-          providerStatuses.find((provider) => provider.provider === "opencode")?.models ?? [],
-        cursor: providerStatuses.find((provider) => provider.provider === "cursor")?.models ?? [],
       }),
       [providerStatuses],
     );
@@ -583,22 +565,6 @@ export const ChatComposer = memo(
         }
         return searchSlashCommandItems(slashCommandItems, query);
       }
-      if (composerTrigger.kind === "skill") {
-        return searchProviderSkills(
-          selectedProviderStatus?.skills ?? [],
-          composerTrigger.query,
-        ).map((skill) => ({
-          id: `skill:${selectedProvider}:${skill.name}`,
-          type: "skill" as const,
-          provider: selectedProvider,
-          skill,
-          label: formatProviderSkillDisplayName(skill),
-          description:
-            skill.shortDescription ??
-            skill.description ??
-            (skill.scope ? `${skill.scope} skill` : "Run provider skill"),
-        }));
-      }
       return [];
     }, [composerTrigger, selectedProvider, selectedProviderStatus, workspaceEntries]);
 
@@ -632,21 +598,15 @@ export const ChatComposer = memo(
 
     const isComposerApprovalState = activePendingApproval !== null;
     const activePendingUserInput = pendingUserInputs[0] ?? null;
-    const hasComposerHeader =
-      isComposerApprovalState ||
-      pendingUserInputs.length > 0 ||
-      (showPlanFollowUpPrompt && activeProposedPlan !== null);
+    const hasComposerHeader = isComposerApprovalState || pendingUserInputs.length > 0;
 
-    const composerFooterHasWideActions = showPlanFollowUpPrompt || activePendingProgress !== null;
+    const composerFooterHasWideActions = activePendingProgress !== null;
     const composerFooterActionLayoutKey = useMemo(() => {
       if (activePendingProgress) {
         return `pending:${activePendingProgress.questionIndex}:${activePendingProgress.isLastQuestion}:${activePendingIsResponding}`;
       }
       if (phase === "running") {
         return "running";
-      }
-      if (showPlanFollowUpPrompt) {
-        return prompt.trim().length > 0 ? "plan:refine" : "plan:implement";
       }
       return `idle:${composerSendState.hasSendableContent}:${isSendBusy}:${isConnecting}:${isPreparingWorktree}`;
     }, [
@@ -657,8 +617,6 @@ export const ChatComposer = memo(
       isPreparingWorktree,
       isSendBusy,
       phase,
-      prompt,
-      showPlanFollowUpPrompt,
     ]);
 
     const isComposerMenuLoading =
@@ -667,9 +625,6 @@ export const ChatComposer = memo(
         workspaceEntriesQuery.isLoading ||
         workspaceEntriesQuery.isFetching);
     const composerMenuEmptyState = useMemo(() => {
-      if (composerTriggerKind === "skill") {
-        return "No skills found. Try / to browse provider commands.";
-      }
       return composerTriggerKind === "path"
         ? "No matching files or folders."
         : "No matching command.";
@@ -1209,24 +1164,6 @@ export const ChatComposer = memo(
           }
           return;
         }
-        if (item.type === "skill") {
-          const replacement = `$${item.skill.name} `;
-          const replacementRangeEnd = extendReplacementRangeForTrailingSpace(
-            snapshot.value,
-            trigger.rangeEnd,
-            replacement,
-          );
-          const applied = applyPromptReplacement(
-            trigger.rangeStart,
-            replacementRangeEnd,
-            replacement,
-            { expectedText: snapshot.value.slice(trigger.rangeStart, replacementRangeEnd) },
-          );
-          if (applied) {
-            setComposerHighlightedItemId(null);
-          }
-          return;
-        }
       },
       [applyPromptReplacement, handleInteractionModeChange, resolveActiveComposerTrigger],
     );
@@ -1390,13 +1327,23 @@ export const ChatComposer = memo(
       addComposerImages(files);
       focusComposer();
     };
+    const [isInterrupting, setIsInterrupting] = useState(false);
+    // Auto-clear the "stopping…" state when the turn actually ends, or
+    // after a short ceiling so the UI never gets stuck.
+    useEffect(() => {
+      if (phase !== "running" && isInterrupting) {
+        setIsInterrupting(false);
+      }
+    }, [phase, isInterrupting]);
+    useEffect(() => {
+      if (!isInterrupting) return;
+      const timer = window.setTimeout(() => setIsInterrupting(false), 8_000);
+      return () => window.clearTimeout(timer);
+    }, [isInterrupting]);
     const handleInterruptPrimaryAction = useCallback(() => {
+      setIsInterrupting(true);
       void onInterrupt();
     }, [onInterrupt]);
-    const handleImplementPlanInNewThreadPrimaryAction = useCallback(() => {
-      void onImplementPlanInNewThread();
-    }, [onImplementPlanInNewThread]);
-
     // ------------------------------------------------------------------
     // Imperative handle
     // ------------------------------------------------------------------
@@ -1525,8 +1472,8 @@ export const ChatComposer = memo(
         >
           <div
             className={cn(
-              "rounded-[20px] border bg-card transition-colors duration-200 has-focus-visible:border-ring/45",
-              isDragOverComposer ? "border-primary/70 bg-accent/30" : "border-border",
+              "rounded-[22px] border bg-surface shadow-soft transition-colors duration-200 has-focus-visible:border-brand/55 has-focus-visible:shadow-lifted",
+              isDragOverComposer ? "border-brand/70 bg-brand/5" : "border-border-strong/50",
               composerProviderState.composerSurfaceClassName,
             )}
           >
@@ -1546,13 +1493,6 @@ export const ChatComposer = memo(
                   questionIndex={activePendingQuestionIndex}
                   onToggleOption={onSelectActivePendingUserInputOption}
                   onAdvance={onAdvanceActivePendingUserInput}
-                />
-              </div>
-            ) : showPlanFollowUpPrompt && activeProposedPlan ? (
-              <div className="rounded-t-[19px] border-b border-border/65 bg-muted/20">
-                <ComposerPlanFollowUpBanner
-                  key={activeProposedPlan.id}
-                  planTitle={proposedPlanTitle(activeProposedPlan.planMarkdown) ?? null}
                 />
               </div>
             ) : null}
@@ -1664,7 +1604,6 @@ export const ChatComposer = memo(
                     ? composerTerminalContexts
                     : []
                 }
-                skills={selectedProviderStatus?.skills ?? []}
                 onRemoveTerminalContext={removeComposerTerminalContextFromDraft}
                 onChange={onPromptChange}
                 onCommandKeyDown={onComposerCommandKey}
@@ -1674,11 +1613,9 @@ export const ChatComposer = memo(
                     ? (activePendingApproval?.detail ?? "Resolve this approval request to continue")
                     : activePendingProgress
                       ? "Type your own answer, or leave this blank to use the selected option"
-                      : showPlanFollowUpPrompt && activeProposedPlan
-                        ? "Add feedback to refine the plan, or leave this blank to implement it"
-                        : phase === "disconnected"
-                          ? "Ask for a design refinement or attach reference images"
-                          : "Describe a design, a refinement, or drop reference images here"
+                      : phase === "disconnected"
+                        ? "Ask for a design refinement or attach reference images"
+                        : "Describe a design, a refinement, or drop reference images here"
                 }
                 disabled={isConnecting || isComposerApprovalState}
               />
@@ -1748,17 +1685,13 @@ export const ChatComposer = memo(
                     activeContextWindow={activeContextWindow}
                     pendingAction={pendingPrimaryAction}
                     isRunning={phase === "running"}
-                    showPlanFollowUpPrompt={
-                      pendingUserInputs.length === 0 && showPlanFollowUpPrompt
-                    }
-                    promptHasText={prompt.trim().length > 0}
                     isSendBusy={isSendBusy}
                     isConnecting={isConnecting}
                     isPreparingWorktree={isPreparingWorktree}
+                    isInterrupting={isInterrupting}
                     hasSendableContent={composerSendState.hasSendableContent}
                     onPreviousPendingQuestion={onPreviousActivePendingUserInputQuestion}
                     onInterrupt={handleInterruptPrimaryAction}
-                    onImplementPlanInNewThread={handleImplementPlanInNewThreadPrimaryAction}
                   />
                 </div>
               </div>

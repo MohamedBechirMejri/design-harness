@@ -1,15 +1,4 @@
-import {
-  DateTime,
-  Duration,
-  Effect,
-  Equal,
-  Layer,
-  Option,
-  Result,
-  Schema,
-  Stream,
-  Types,
-} from "effect";
+import { DateTime, Duration, Effect, Equal, Layer, Option, Result, Schema, Stream } from "effect";
 import { ChildProcessSpawner } from "effect/unstable/process";
 import * as CodexClient from "effect-codex-app-server/client";
 import * as CodexSchema from "effect-codex-app-server/schema";
@@ -21,9 +10,8 @@ import type {
   ServerProviderState,
   ModelCapabilities,
   ServerProviderModel,
-  ServerProviderSkill,
-} from "@t3tools/contracts";
-import { ServerSettingsError } from "@t3tools/contracts";
+} from "@dh/contracts";
+import { ServerSettingsError } from "@dh/contracts";
 
 import { makeManagedServerProvider } from "../makeManagedServerProvider.ts";
 import { buildServerProvider } from "../providerSnapshot.ts";
@@ -38,7 +26,6 @@ export interface CodexAppServerProviderSnapshot {
   readonly account: CodexSchema.V2GetAccountResponse;
   readonly version: string | undefined;
   readonly models: ReadonlyArray<ServerProviderModel>;
-  readonly skills: ReadonlyArray<ServerProviderSkill>;
 }
 
 const REASONING_EFFORT_LABELS: Record<CodexSchema.V2ModelListResponse__ReasoningEffort, string> = {
@@ -142,42 +129,6 @@ function appendCustomCodexModels(
   return customEntries.length === 0 ? models : [...models, ...customEntries];
 }
 
-function parseCodexSkillsListResponse(
-  response: CodexSchema.V2SkillsListResponse,
-  cwd: string,
-): ReadonlyArray<ServerProviderSkill> {
-  const matchingEntry = response.data.find((entry) => entry.cwd === cwd);
-  const skills = matchingEntry
-    ? matchingEntry.skills
-    : response.data.flatMap((entry) => entry.skills);
-
-  return skills.map((skill) => {
-    const shortDescription =
-      skill.shortDescription ?? skill.interface?.shortDescription ?? undefined;
-
-    const parsedSkill: Types.Mutable<ServerProviderSkill> = {
-      name: skill.name,
-      path: skill.path,
-      enabled: skill.enabled,
-    };
-
-    if (skill.description) {
-      parsedSkill.description = skill.description;
-    }
-    if (skill.scope) {
-      parsedSkill.scope = skill.scope;
-    }
-    if (skill.interface?.displayName) {
-      parsedSkill.displayName = skill.interface.displayName;
-    }
-    if (shortDescription) {
-      parsedSkill.shortDescription = shortDescription;
-    }
-
-    return parsedSkill;
-  });
-}
-
 const requestAllCodexModels = Effect.fn("requestAllCodexModels")(function* (
   client: CodexClient.CodexAppServerClientShape,
 ) {
@@ -199,8 +150,8 @@ const requestAllCodexModels = Effect.fn("requestAllCodexModels")(function* (
 export function buildCodexInitializeParams(): CodexSchema.V1InitializeParams {
   return {
     clientInfo: {
-      name: "t3code_desktop",
-      title: "T3 Code Desktop",
+      name: "dh_web",
+      title: "Design Harness Desktop",
       version: packageJson.version,
     },
     capabilities: {
@@ -229,8 +180,8 @@ const probeCodexAppServerProvider = Effect.fn("probeCodexAppServerProvider")(fun
 
   const initialize = yield* client.request("initialize", {
     clientInfo: {
-      name: "t3code_desktop",
-      title: "T3 Code Desktop",
+      name: "dh_web",
+      title: "Design Harness Desktop",
       version: "0.1.0",
     },
     capabilities: {
@@ -249,25 +200,15 @@ const probeCodexAppServerProvider = Effect.fn("probeCodexAppServerProvider")(fun
       account: accountResponse,
       version,
       models: appendCustomCodexModels([], input.customModels ?? []),
-      skills: [],
     } satisfies CodexAppServerProviderSnapshot;
   }
 
-  const [skillsResponse, models] = yield* Effect.all(
-    [
-      client.request("skills/list", {
-        cwds: [input.cwd],
-      }),
-      requestAllCodexModels(client),
-    ],
-    { concurrency: "unbounded" },
-  );
+  const models = yield* requestAllCodexModels(client);
 
   return {
     account: accountResponse,
     version,
     models: appendCustomCodexModels(models, input.customModels ?? []),
-    skills: parseCodexSkillsListResponse(skillsResponse, input.cwd),
   } satisfies CodexAppServerProviderSnapshot;
 }, Effect.scoped);
 
@@ -292,13 +233,12 @@ const makePendingCodexProvider = (codexSettings: CodexSettings): ServerProvider 
       enabled: false,
       checkedAt,
       models,
-      skills: [],
       probe: {
         installed: false,
         version: null,
         status: "warning",
         auth: { status: "unknown" },
-        message: "Codex is disabled in T3 Code settings.",
+        message: "Codex is disabled in Design Harness settings.",
       },
     });
   }
@@ -308,7 +248,6 @@ const makePendingCodexProvider = (codexSettings: CodexSettings): ServerProvider 
     enabled: true,
     checkedAt,
     models,
-    skills: [],
     probe: {
       installed: false,
       version: null,
@@ -375,13 +314,12 @@ export const checkCodexProviderStatus = Effect.fn("checkCodexProviderStatus")(fu
       enabled: false,
       checkedAt,
       models: emptyModels,
-      skills: [],
       probe: {
         installed: false,
         version: null,
         status: "warning",
         auth: { status: "unknown" },
-        message: "Codex is disabled in T3 Code settings.",
+        message: "Codex is disabled in Design Harness settings.",
       },
     });
   }
@@ -401,7 +339,6 @@ export const checkCodexProviderStatus = Effect.fn("checkCodexProviderStatus")(fu
       enabled: codexSettings.enabled,
       checkedAt,
       models: emptyModels,
-      skills: [],
       probe: {
         installed,
         version: null,
@@ -420,7 +357,6 @@ export const checkCodexProviderStatus = Effect.fn("checkCodexProviderStatus")(fu
       enabled: codexSettings.enabled,
       checkedAt,
       models: emptyModels,
-      skills: [],
       probe: {
         installed: true,
         version: null,
@@ -439,7 +375,6 @@ export const checkCodexProviderStatus = Effect.fn("checkCodexProviderStatus")(fu
     enabled: codexSettings.enabled,
     checkedAt,
     models: snapshot.models,
-    skills: snapshot.skills,
     probe: {
       installed: true,
       version: snapshot.version ?? null,

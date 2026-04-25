@@ -20,7 +20,7 @@ import {
   sortProjectsForSidebar,
   THREAD_JUMP_HINT_SHOW_DELAY_MS,
 } from "./Sidebar.logic";
-import { EnvironmentId, OrchestrationLatestTurn, ProjectId, ThreadId } from "@t3tools/contracts";
+import { EnvironmentId, OrchestrationLatestTurn, ProjectId, ThreadId } from "@dh/contracts";
 import {
   DEFAULT_INTERACTION_MODE,
   DEFAULT_RUNTIME_MODE,
@@ -470,7 +470,7 @@ describe("resolveThreadStatusPill", () => {
     hasActionableProposedPlan: false,
     hasPendingApprovals: false,
     hasPendingUserInput: false,
-    interactionMode: "plan" as const,
+    interactionMode: "default" as const,
     latestTurn: null,
     lastVisitedAt: undefined,
     session: {
@@ -494,7 +494,7 @@ describe("resolveThreadStatusPill", () => {
     ).toMatchObject({ label: "Pending Approval", pulse: false });
   });
 
-  it("shows awaiting input when plan mode is blocked on user answers", () => {
+  it("shows awaiting input when blocked on user answers", () => {
     expect(
       resolveThreadStatusPill({
         thread: {
@@ -511,39 +511,6 @@ describe("resolveThreadStatusPill", () => {
         thread: baseThread,
       }),
     ).toMatchObject({ label: "Working", pulse: true });
-  });
-
-  it("shows plan ready when a settled plan turn has a proposed plan ready for follow-up", () => {
-    expect(
-      resolveThreadStatusPill({
-        thread: {
-          ...baseThread,
-          hasActionableProposedPlan: true,
-          latestTurn: makeLatestTurn(),
-          session: {
-            ...baseThread.session,
-            status: "ready",
-            orchestrationStatus: "ready",
-          },
-        },
-      }),
-    ).toMatchObject({ label: "Plan Ready", pulse: false });
-  });
-
-  it("does not show plan ready after the proposed plan was implemented elsewhere", () => {
-    expect(
-      resolveThreadStatusPill({
-        thread: {
-          ...baseThread,
-          latestTurn: makeLatestTurn(),
-          session: {
-            ...baseThread.session,
-            status: "ready",
-            orchestrationStatus: "ready",
-          },
-        },
-      }),
-    ).toMatchObject({ label: "Completed", pulse: false });
   });
 
   it("shows completed when there is an unseen completion and no active blocker", () => {
@@ -617,25 +584,6 @@ describe("resolveProjectStatusIndicator", () => {
         },
       ]),
     ).toMatchObject({ label: "Pending Approval", dotClass: "bg-amber-500" });
-  });
-
-  it("prefers plan-ready over completed when no stronger action is needed", () => {
-    expect(
-      resolveProjectStatusIndicator([
-        {
-          label: "Completed",
-          colorClass: "text-emerald-600",
-          dotClass: "bg-emerald-500",
-          pulse: false,
-        },
-        {
-          label: "Plan Ready",
-          colorClass: "text-violet-600",
-          dotClass: "bg-violet-500",
-          pulse: false,
-        },
-      ]),
-    ).toMatchObject({ label: "Plan Ready", dotClass: "bg-violet-500" });
   });
 });
 

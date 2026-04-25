@@ -1,16 +1,6 @@
-import {
-  DEFAULT_GIT_TEXT_GENERATION_MODEL_BY_PROVIDER,
-  type ModelSelection,
-  type ProviderKind,
-  type ServerProvider,
-} from "@t3tools/contracts";
-import {
-  createModelSelection,
-  normalizeModelSlug,
-  resolveSelectableModel,
-} from "@t3tools/shared/model";
-import { getComposerProviderState } from "./components/chat/composerProviderRegistry";
-import { UnifiedSettings } from "@t3tools/contracts/settings";
+import { type ProviderKind, type ServerProvider } from "@dh/contracts";
+import { normalizeModelSlug, resolveSelectableModel } from "@dh/shared/model";
+import { UnifiedSettings } from "@dh/contracts/settings";
 import {
   getDefaultServerModel,
   getProviderModels,
@@ -51,20 +41,6 @@ const PROVIDER_CUSTOM_MODEL_CONFIG: Record<ProviderKind, ProviderCustomModelConf
     description: "Save additional Claude model slugs for the picker and `/model` command.",
     placeholder: "your-claude-model-slug",
     example: "claude-sonnet-5-0",
-  },
-  cursor: {
-    provider: "cursor",
-    title: "Cursor",
-    description: "Save additional Cursor model slugs for the picker and `/model` command.",
-    placeholder: "your-cursor-model-slug",
-    example: "claude-sonnet-4-6",
-  },
-  opencode: {
-    provider: "opencode",
-    title: "OpenCode",
-    description: "Save additional OpenCode model slugs in `provider/model` format.",
-    placeholder: "openai/gpt-5",
-    example: "anthropic/claude-sonnet-4-5-20250929",
   },
 };
 
@@ -188,44 +164,5 @@ export function getCustomModelOptionsByProvider(
       "claudeAgent",
       selectedProvider === "claudeAgent" ? selectedModel : undefined,
     ),
-    cursor: getAppModelOptions(
-      settings,
-      providers,
-      "cursor",
-      selectedProvider === "cursor" ? selectedModel : undefined,
-    ),
-    opencode: getAppModelOptions(
-      settings,
-      providers,
-      "opencode",
-      selectedProvider === "opencode" ? selectedModel : undefined,
-    ),
   };
-}
-
-export function resolveAppModelSelectionState(
-  settings: UnifiedSettings,
-  providers: ReadonlyArray<ServerProvider>,
-): ModelSelection {
-  const selection = settings.textGenerationModelSelection ?? {
-    provider: "codex" as const,
-    model: DEFAULT_GIT_TEXT_GENERATION_MODEL_BY_PROVIDER.codex,
-  };
-  const provider = resolveSelectableProvider(providers, selection.provider);
-
-  // When the provider changed due to fallback (e.g. selected provider was disabled),
-  // don't carry over the old provider's model — use the fallback provider's default.
-  const selectedModel = provider === selection.provider ? selection.model : null;
-  const model = resolveAppModelSelection(provider, settings, providers, selectedModel);
-  const { modelOptionsForDispatch } = getComposerProviderState({
-    provider,
-    model,
-    models: getProviderModels(providers, provider),
-    prompt: "",
-    modelOptions: {
-      [provider]: provider === selection.provider ? selection.options : undefined,
-    },
-  });
-
-  return createModelSelection(provider, model, modelOptionsForDispatch);
 }
