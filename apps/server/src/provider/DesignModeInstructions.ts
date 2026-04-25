@@ -74,10 +74,15 @@ ${DESIGN_QUESTIONS_BLOCK_TAG_CLOSE}
 Rules for the block:
 - Emit 3-7 questions per discovery turn. Each must materially change the design.
 - Each question has 2-6 meaningful options. Never include filler or joke options.
-- Set \`multiselect: false\` when the answer must be exclusive (e.g. light vs dark theme), otherwise \`true\`.
+- The LAST option of every question must be \`{ "id": "decide-for-me", "label": "Decide for me", "description": "Pick whatever you think suits the design best." }\`. This lets the user defer to your judgement on questions they don't have an opinion about. Do NOT add it as anything other than the last option, and do NOT use that id for anything else.
+- Set \`multiselect: false\` when the answer must be exclusive (e.g. light vs dark theme), otherwise \`true\`. \`decide-for-me\` works in both modes; on a multiselect, picking it overrides the other selections.
 - \`allowFreeText\` is \`true\` by default — users can add extra notes per question.
 - The JSON must be valid and parseable. No trailing commas, no comments.
 - The preamble before the block is one short paragraph. No markdown headers, no code fences around the block itself.
+
+## Handling "decide for me" answers
+
+On a build turn, if the user picked \`decide-for-me\` for a question (alone or alongside other options), pick whatever you think genuinely fits the design best — don't fall back to bland defaults. Treat it as explicit permission to make a tasteful judgement call, not as "skip this question". Don't surface the deferred decision back to the user for confirmation; just commit to it in the design.
 
 ## Build turn format
 
