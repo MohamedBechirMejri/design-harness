@@ -19,6 +19,106 @@ import { readEnvironmentApi } from "~/environmentApi";
 
 const POLL_INTERVAL_MS = 2000;
 const EMPTY_ENTRIES: ReadonlyArray<DesignPreviewEntry> = [];
+const EMPTY_ASSET_MAP: ReadonlyMap<string, string> = new Map();
+
+const INLINABLE_ASSET_RE = /\.(css|js|mjs|cjs)$/i;
+
+function isInlinableAssetPath(path: string): boolean {
+  return INLINABLE_ASSET_RE.test(path);
+}
+
+function normalizeRelativeAssetPath(input: string): string | null {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+  // External or absolute references — leave them alone.
+  if (
+    /^[a-z][a-z0-9+\-.]*:/i.test(trimmed) ||
+    trimmed.startsWith("//") ||
+    trimmed.startsWith("/") ||
+    trimmed.startsWith("#") ||
+    trimmed.startsWith("data:") ||
+    trimmed.startsWith("blob:")
+  ) {
+    return null;
+  }
+  // Strip query/hash so we can match against the asset map keys.
+  const withoutQuery = trimmed.replace(/[?#].*$/, "");
+  if (withoutQuery.startsWith("./")) return withoutQuery.slice(2);
+  return withoutQuery;
+}
+
+function escapeHtml(input: string): string {
+  return input.replace(/[&<>"']/g, (c) =>
+    c === "&" ? "&amp;" : c === "<" ? "&lt;" : c === ">" ? "&gt;" : c === '"' ? "&quot;" : "&#39;",
+  );
+}
+
+function escapeStyleContents(input: string): string {
+  // Avoid breaking out of the <style> tag inside the iframe's srcdoc.
+  return input.replace(/<\/style/gi, "<\\/style");
+}
+
+function escapeScriptContents(input: string): string {
+  return input.replace(/<\/script/gi, "<\\/script");
+}
+
+/**
+ * Rewrite local `<link rel="stylesheet">` and `<script src="…">` references
+ * in an HTML document so the iframe (rendered via `srcDoc`, which has no
+ * usable base URL) can still load the design's sibling assets.
+ *
+ * - CSS: replaced with `<style>…</style>` containing the file contents.
+ * - JS:  replaced with `<script>…</script>` (preserving `type` and `defer`).
+ * - Anything we can't resolve (external URLs, missing files, images we
+ *   don't have bytes for) is left untouched.
+ */
+function inlineLocalAssets(input: {
+  html: string;
+  htmlPath: string;
+  assets: ReadonlyMap<string, string>;
+}): string {
+  if (input.assets.size === 0) return input.html;
+
+  const linkPattern = /<link\b([^>]*)>/gi;
+  const scriptPattern = /<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi;
+
+  const lookup = (rawPath: string): string | null => {
+    const normalized = normalizeRelativeAssetPath(rawPath);
+    if (!normalized) return null;
+    return input.assets.get(normalized) ?? null;
+  };
+
+  let html = input.html.replace(linkPattern, (match, attrs: string) => {
+    const isStylesheet = /\brel\s*=\s*["']?stylesheet["']?/i.test(attrs);
+    if (!isStylesheet) return match;
+    const hrefMatch = /\bhref\s*=\s*("([^"]*)"|'([^']*)'|([^\s>]+))/i.exec(attrs);
+    const href = hrefMatch?.[2] ?? hrefMatch?.[3] ?? hrefMatch?.[4];
+    if (!href) return match;
+    const contents = lookup(href);
+    if (contents === null) return match;
+    return `<style data-design-source="${escapeHtml(href)}">${escapeStyleContents(contents)}</style>`;
+  });
+
+  html = html.replace(scriptPattern, (match, attrs: string, body: string) => {
+    const srcMatch = /\bsrc\s*=\s*("([^"]*)"|'([^']*)'|([^\s>]+))/i.exec(attrs);
+    if (!srcMatch) return match;
+    const src = srcMatch[2] ?? srcMatch[3] ?? srcMatch[4];
+    if (!src) return match;
+    const contents = lookup(src);
+    if (contents === null) return match;
+    // Preserve type and defer/async/module attributes by reusing the original
+    // attrs but stripping the `src=` clause. Inlined module scripts still need
+    // `type="module"` to evaluate as ESM.
+    const cleaned = attrs
+      .replace(/\bsrc\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/i, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    const attrPrefix = cleaned.length > 0 ? ` ${cleaned}` : "";
+    return `<script${attrPrefix} data-design-source="${escapeHtml(src)}">${escapeScriptContents(contents)}${body ?? ""}</script>`;
+  });
+
+  return html;
+}
 const VIEWPORT_STORAGE_KEY = "dh:design-preview:viewport";
 
 function readPersistedViewport(): ViewportPreset {
@@ -162,10 +262,73 @@ const DesignPreviewSidebar = memo(function DesignPreviewSidebar({
   const selectedIsHtml = selectedPath ? isHtmlFile(selectedPath) : false;
   const hasEntries = entries.length > 0;
 
+  // When an HTML file is selected, fetch its sibling CSS/JS assets so we can
+  // inline them. Iframe `srcDoc` lives at `about:srcdoc` which has no useful
+  // base URL, so `<link href="styles.css">` and `<script src="app.js">` 404
+  // unless we either inline the bytes or rewrite them to blob: URLs.
+  const inlinableAssetEntries = useMemo(
+    () =>
+      selectedIsHtml
+        ? entries.filter((entry) => isInlinableAssetPath(entry.relativePath))
+        : EMPTY_ENTRIES,
+    [entries, selectedIsHtml],
+  );
+  const inlinableAssetSignature = useMemo(
+    () =>
+      inlinableAssetEntries
+        .map((entry) => `${entry.relativePath}:${entry.modifiedAtMs ?? 0}`)
+        .join("|"),
+    [inlinableAssetEntries],
+  );
+  const assetsQuery = useQuery({
+    queryKey: [
+      "designPreviewAssets",
+      environmentId,
+      workspaceRoot,
+      threadId,
+      inlinableAssetSignature,
+    ],
+    enabled: Boolean(workspaceRoot && selectedIsHtml && inlinableAssetEntries.length > 0),
+    queryFn: async (): Promise<ReadonlyMap<string, string>> => {
+      if (!workspaceRoot) return EMPTY_ASSET_MAP;
+      const api = readEnvironmentApi(environmentId);
+      if (!api) return EMPTY_ASSET_MAP;
+      const settled = await Promise.all(
+        inlinableAssetEntries.map(async (entry) => {
+          try {
+            const result = await api.designPreview.read({
+              cwd: workspaceRoot,
+              threadId,
+              relativePath: entry.relativePath,
+            });
+            return [entry.relativePath, result.contents] as const;
+          } catch {
+            return null;
+          }
+        }),
+      );
+      const map = new Map<string, string>();
+      for (const pair of settled) {
+        if (pair) map.set(pair[0], pair[1]);
+      }
+      return map;
+    },
+  });
+  const inlinedAssets = assetsQuery.data ?? EMPTY_ASSET_MAP;
+
+  const renderedContents = useMemo(() => {
+    if (!selectedIsHtml || !contents) return contents;
+    return inlineLocalAssets({
+      html: contents,
+      htmlPath: selectedPath ?? "",
+      assets: inlinedAssets,
+    });
+  }, [contents, inlinedAssets, selectedIsHtml, selectedPath]);
+
   const openInNewTab =
-    selectedIsHtml && contents
+    selectedIsHtml && renderedContents
       ? () => {
-          const blob = new Blob([contents], { type: "text/html" });
+          const blob = new Blob([renderedContents], { type: "text/html" });
           const url = URL.createObjectURL(blob);
           window.open(url, "_blank", "noopener,noreferrer");
           setTimeout(() => URL.revokeObjectURL(url), 60_000);
@@ -384,7 +547,7 @@ const DesignPreviewSidebar = memo(function DesignPreviewSidebar({
                 key={`${selectedPath}:${lastModifiedAtMs}`}
                 title={`Preview of ${selectedPath}`}
                 sandbox="allow-scripts allow-forms allow-popups"
-                srcDoc={contents}
+                srcDoc={renderedContents}
                 className="border-0 bg-white"
                 style={
                   viewportWidth === null
