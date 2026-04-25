@@ -1,5 +1,4 @@
 import { useEffect, type ReactNode } from "react";
-import { useNavigate } from "@tanstack/react-router";
 
 import ThreadSidebar from "./Sidebar";
 import { Sidebar, SidebarProvider, SidebarRail } from "./ui/sidebar";
@@ -32,8 +31,6 @@ function persistSidebarOpen(open: boolean): void {
 }
 
 export function AppSidebarLayout({ children }: { children: ReactNode }) {
-  const navigate = useNavigate();
-
   useEffect(() => {
     const onWindowKeyDown = (event: KeyboardEvent) => {
       syncShortcutModifierStateFromKeyboardEvent(event);
@@ -55,23 +52,6 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
       window.removeEventListener("blur", onWindowBlur);
     };
   }, []);
-
-  useEffect(() => {
-    const onMenuAction = window.desktopBridge?.onMenuAction;
-    if (typeof onMenuAction !== "function") {
-      return;
-    }
-
-    const unsubscribe = onMenuAction((action) => {
-      if (action === "open-settings") {
-        void navigate({ to: "/settings" });
-      }
-    });
-
-    return () => {
-      unsubscribe?.();
-    };
-  }, [navigate]);
 
   return (
     <SidebarProvider defaultOpen={readPersistedSidebarOpen()} onOpenChange={persistSidebarOpen}>

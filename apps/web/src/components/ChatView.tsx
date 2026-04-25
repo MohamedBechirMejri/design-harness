@@ -24,7 +24,6 @@ import { useNavigate } from "@tanstack/react-router";
 import { useGitStatus } from "~/lib/gitStatusState";
 import { usePrimaryEnvironmentId } from "../environments/primary";
 import { readEnvironmentApi } from "../environmentApi";
-import { isElectron } from "../env";
 import { readLocalApi } from "../localApi";
 import {
   collapseExpandedComposerCursor,

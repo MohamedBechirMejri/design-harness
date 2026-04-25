@@ -29,28 +29,12 @@ let cachedApi: LocalApi | undefined;
 export function createLocalApi(rpcClient: WsRpcClient): LocalApi {
   return {
     dialogs: {
-      pickFolder: async (options) => {
-        if (!window.desktopBridge) return null;
-        return window.desktopBridge.pickFolder(options);
-      },
-      confirm: async (message) => {
-        if (window.desktopBridge) {
-          return window.desktopBridge.confirm(message);
-        }
-        return window.confirm(message);
-      },
+      pickFolder: async () => null,
+      confirm: async (message) => window.confirm(message),
     },
     shell: {
       openInEditor: (cwd, editor) => rpcClient.shell.openInEditor({ cwd, editor }),
       openExternal: async (url) => {
-        if (window.desktopBridge) {
-          const opened = await window.desktopBridge.openExternal(url);
-          if (!opened) {
-            throw new Error("Unable to open link.");
-          }
-          return;
-        }
-
         window.open(url, "_blank", "noopener,noreferrer");
       },
     },
@@ -58,54 +42,22 @@ export function createLocalApi(rpcClient: WsRpcClient): LocalApi {
       show: async <T extends string>(
         items: readonly ContextMenuItem<T>[],
         position?: { x: number; y: number },
-      ): Promise<T | null> => {
-        if (window.desktopBridge) {
-          return window.desktopBridge.showContextMenu(items, position) as Promise<T | null>;
-        }
-        return showContextMenuFallback(items, position);
-      },
+      ): Promise<T | null> => showContextMenuFallback(items, position),
     },
     persistence: {
-      getClientSettings: async () => {
-        if (window.desktopBridge) {
-          return window.desktopBridge.getClientSettings();
-        }
-        return readBrowserClientSettings();
-      },
+      getClientSettings: async () => readBrowserClientSettings(),
       setClientSettings: async (settings) => {
-        if (window.desktopBridge) {
-          return window.desktopBridge.setClientSettings(settings);
-        }
         writeBrowserClientSettings(settings);
       },
-      getSavedEnvironmentRegistry: async () => {
-        if (window.desktopBridge) {
-          return window.desktopBridge.getSavedEnvironmentRegistry();
-        }
-        return readBrowserSavedEnvironmentRegistry();
-      },
+      getSavedEnvironmentRegistry: async () => readBrowserSavedEnvironmentRegistry(),
       setSavedEnvironmentRegistry: async (records) => {
-        if (window.desktopBridge) {
-          return window.desktopBridge.setSavedEnvironmentRegistry(records);
-        }
         writeBrowserSavedEnvironmentRegistry(records);
       },
-      getSavedEnvironmentSecret: async (environmentId) => {
-        if (window.desktopBridge) {
-          return window.desktopBridge.getSavedEnvironmentSecret(environmentId);
-        }
-        return readBrowserSavedEnvironmentSecret(environmentId);
-      },
-      setSavedEnvironmentSecret: async (environmentId, secret) => {
-        if (window.desktopBridge) {
-          return window.desktopBridge.setSavedEnvironmentSecret(environmentId, secret);
-        }
-        return writeBrowserSavedEnvironmentSecret(environmentId, secret);
-      },
+      getSavedEnvironmentSecret: async (environmentId) =>
+        readBrowserSavedEnvironmentSecret(environmentId),
+      setSavedEnvironmentSecret: async (environmentId, secret) =>
+        writeBrowserSavedEnvironmentSecret(environmentId, secret),
       removeSavedEnvironmentSecret: async (environmentId) => {
-        if (window.desktopBridge) {
-          return window.desktopBridge.removeSavedEnvironmentSecret(environmentId);
-        }
         removeBrowserSavedEnvironmentSecret(environmentId);
       },
     },

@@ -440,31 +440,6 @@ describe("wsApi", () => {
     });
   });
 
-  it("forwards context menu metadata to the desktop bridge", async () => {
-    const showContextMenu = vi.fn().mockResolvedValue("delete");
-    getWindowForTest().desktopBridge = makeDesktopBridge({ showContextMenu });
-
-    const { createLocalApi } = await import("./localApi");
-    const api = createLocalApi(rpcClientMock as never);
-    const items = [{ id: "delete", label: "Delete" }] as const;
-
-    await expect(api.contextMenu.show(items)).resolves.toBe("delete");
-    expect(showContextMenu).toHaveBeenCalledWith(items, undefined);
-  });
-
-  it("forwards folder picker options to the desktop bridge", async () => {
-    const pickFolder = vi.fn().mockResolvedValue("/tmp/project");
-    getWindowForTest().desktopBridge = makeDesktopBridge({ pickFolder });
-
-    const { createLocalApi } = await import("./localApi");
-    const api = createLocalApi(rpcClientMock as never);
-
-    await expect(api.dialogs.pickFolder({ initialPath: "/tmp/workspace" })).resolves.toBe(
-      "/tmp/project",
-    );
-    expect(pickFolder).toHaveBeenCalledWith({ initialPath: "/tmp/workspace" });
-  });
-
   it("falls back to the browser context menu helper when the desktop bridge is missing", async () => {
     showContextMenuFallbackMock.mockResolvedValue("rename");
     const { createLocalApi } = await import("./localApi");
@@ -474,62 +449,6 @@ describe("wsApi", () => {
 
     await expect(api.contextMenu.show(items, { x: 4, y: 5 })).resolves.toBe("rename");
     expect(showContextMenuFallbackMock).toHaveBeenCalledWith(items, { x: 4, y: 5 });
-  });
-
-  it("reads and writes persistence through the desktop bridge when available", async () => {
-    const clientSettings = {
-      confirmThreadArchive: true,
-      confirmThreadDelete: false,
-      diffWordWrap: true,
-      favorites: [],
-      sidebarProjectGroupingMode: "repository_path" as const,
-      sidebarProjectGroupingOverrides: {
-        "environment-local:/tmp/project": "separate" as const,
-      },
-      sidebarProjectSortOrder: "manual" as const,
-      sidebarThreadSortOrder: "created_at" as const,
-      timestampFormat: "24-hour" as const,
-    };
-    const getClientSettings = vi.fn().mockResolvedValue({
-      ...clientSettings,
-    });
-    const setClientSettings = vi.fn().mockResolvedValue(undefined);
-    const getSavedEnvironmentRegistry = vi.fn().mockResolvedValue([]);
-    const setSavedEnvironmentRegistry = vi.fn().mockResolvedValue(undefined);
-    const getSavedEnvironmentSecret = vi.fn().mockResolvedValue("bearer-token");
-    const setSavedEnvironmentSecret = vi.fn().mockResolvedValue(true);
-    const removeSavedEnvironmentSecret = vi.fn().mockResolvedValue(undefined);
-    getWindowForTest().desktopBridge = makeDesktopBridge({
-      getClientSettings,
-      setClientSettings,
-      getSavedEnvironmentRegistry,
-      setSavedEnvironmentRegistry,
-      getSavedEnvironmentSecret,
-      setSavedEnvironmentSecret,
-      removeSavedEnvironmentSecret,
-    });
-
-    const { createLocalApi } = await import("./localApi");
-    const api = createLocalApi(rpcClientMock as never);
-
-    await api.persistence.getClientSettings();
-    await api.persistence.setClientSettings(clientSettings);
-    await api.persistence.getSavedEnvironmentRegistry();
-    await api.persistence.setSavedEnvironmentRegistry([]);
-    await api.persistence.getSavedEnvironmentSecret(EnvironmentId.make("environment-local"));
-    await api.persistence.setSavedEnvironmentSecret(
-      EnvironmentId.make("environment-local"),
-      "bearer-token",
-    );
-    await api.persistence.removeSavedEnvironmentSecret(EnvironmentId.make("environment-local"));
-
-    expect(getClientSettings).toHaveBeenCalledWith();
-    expect(setClientSettings).toHaveBeenCalledWith(clientSettings);
-    expect(getSavedEnvironmentRegistry).toHaveBeenCalledWith();
-    expect(setSavedEnvironmentRegistry).toHaveBeenCalledWith([]);
-    expect(getSavedEnvironmentSecret).toHaveBeenCalledWith("environment-local");
-    expect(setSavedEnvironmentSecret).toHaveBeenCalledWith("environment-local", "bearer-token");
-    expect(removeSavedEnvironmentSecret).toHaveBeenCalledWith("environment-local");
   });
 
   it("falls back to browser storage for persistence when the desktop bridge is missing", async () => {
