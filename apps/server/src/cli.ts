@@ -144,7 +144,7 @@ const EnvServerConfig = Config.all({
     Config.map(Option.getOrUndefined),
   ),
   otlpExportIntervalMs: Config.int("DH_OTLP_EXPORT_INTERVAL_MS").pipe(Config.withDefault(10_000)),
-  otlpServiceName: Config.string("DH_OTLP_SERVICE_NAME").pipe(Config.withDefault("t3-server")),
+  otlpServiceName: Config.string("DH_OTLP_SERVICE_NAME").pipe(Config.withDefault("dh-server")),
   mode: Config.schema(RuntimeMode, "DH_MODE").pipe(
     Config.option,
     Config.map(Option.getOrUndefined),
@@ -493,7 +493,7 @@ const withProjectCliSessionToken = <A, E, R>(
   Effect.acquireUseRelease(
     authControlPlane.issueSession({
       role: "owner",
-      label: "t3 project cli",
+      label: "dh project cli",
     }),
     (issued) => run(issued.token),
     (issued) => authControlPlane.revokeSession(issued.sessionId).pipe(Effect.ignore({ log: true })),

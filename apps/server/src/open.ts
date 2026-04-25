@@ -145,7 +145,7 @@ export interface OpenShape {
 /**
  * Open - Service tag for browser/editor launch operations.
  */
-export class Open extends Context.Service<Open, OpenShape>()("t3/open") {}
+export class Open extends Context.Service<Open, OpenShape>()("dh/open") {}
 
 // ==============================
 // Implementations
