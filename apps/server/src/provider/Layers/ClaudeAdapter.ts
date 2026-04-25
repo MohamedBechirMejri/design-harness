@@ -2847,7 +2847,23 @@ const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         "auto-accept-edits": "acceptEdits",
         "full-access": "bypassPermissions",
       };
-      const permissionMode = runtimeModeToPermission[input.runtimeMode];
+      const isDesignMode = input.interactionMode === "design";
+      // Design mode: only let Claude write/edit files inside the sandboxed
+      // cwd. Block Bash, search/grep tools, web fetch, sub-agent Task tool —
+      // anything that could read or explore the surrounding repo.
+      const designModeAllowedTools = ["Write", "Edit", "MultiEdit", "Read"] as const;
+      const designModeDisallowedTools = [
+        "Bash",
+        "Glob",
+        "Grep",
+        "WebFetch",
+        "WebSearch",
+        "Task",
+        "NotebookEdit",
+        "NotebookRead",
+        "TodoWrite",
+      ] as const;
+      const permissionMode = isDesignMode ? "default" : runtimeModeToPermission[input.runtimeMode];
       const settings = {
         ...(typeof thinking === "boolean" ? { alwaysThinkingEnabled: thinking } : {}),
         ...(fastMode ? { fastMode: true } : {}),
@@ -2868,6 +2884,12 @@ const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         ...(permissionMode ? { permissionMode } : {}),
         ...(permissionMode === "bypassPermissions"
           ? { allowDangerouslySkipPermissions: true }
+          : {}),
+        ...(isDesignMode
+          ? {
+              allowedTools: [...designModeAllowedTools],
+              disallowedTools: [...designModeDisallowedTools],
+            }
           : {}),
         ...(Object.keys(settings).length > 0 ? { settings } : {}),
         ...(existingResumeSessionId ? { resume: existingResumeSessionId } : {}),
