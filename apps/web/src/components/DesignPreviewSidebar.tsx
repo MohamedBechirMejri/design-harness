@@ -1,7 +1,9 @@
-import { memo, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   ArrowUpRightIcon,
+  CheckIcon,
+  ClipboardIcon,
   CodeIcon,
   EyeIcon,
   FileIcon,
@@ -17,6 +19,28 @@ import { readEnvironmentApi } from "~/environmentApi";
 
 const POLL_INTERVAL_MS = 2000;
 const EMPTY_ENTRIES: ReadonlyArray<DesignPreviewEntry> = [];
+const VIEWPORT_STORAGE_KEY = "dh:design-preview:viewport";
+
+function readPersistedViewport(): ViewportPreset {
+  if (typeof window === "undefined") return "auto";
+  try {
+    const stored = window.localStorage.getItem(VIEWPORT_STORAGE_KEY);
+    if (stored === "auto" || stored === "mobile" || stored === "tablet" || stored === "desktop") {
+      return stored;
+    }
+  } catch {
+    // ignore
+  }
+  return "auto";
+}
+
+function persistViewport(viewport: ViewportPreset): void {
+  try {
+    window.localStorage.setItem(VIEWPORT_STORAGE_KEY, viewport);
+  } catch {
+    // ignore
+  }
+}
 
 interface DesignPreviewSidebarProps {
   environmentId: EnvironmentId;
@@ -57,8 +81,12 @@ const DesignPreviewSidebar = memo(function DesignPreviewSidebar({
   mode = "sidebar",
 }: DesignPreviewSidebarProps) {
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
-  const [viewport, setViewport] = useState<ViewportPreset>("auto");
+  const [viewport, setViewportState] = useState<ViewportPreset>(() => readPersistedViewport());
   const [view, setView] = useState<"preview" | "source">("preview");
+  const setViewport = useCallback((next: ViewportPreset) => {
+    setViewportState(next);
+    persistViewport(next);
+  }, []);
 
   const listQuery = useQuery({
     queryKey: ["designPreviewList", environmentId, workspaceRoot, threadId],
@@ -146,6 +174,20 @@ const DesignPreviewSidebar = memo(function DesignPreviewSidebar({
 
   const showViewportControls = selectedIsHtml && view === "preview" && hasEntries;
   const viewportWidth = viewport === "auto" ? null : VIEWPORT_WIDTHS[viewport];
+  const canCopySource = Boolean(contents) && hasEntries && selectedPath !== null;
+  const [justCopied, setJustCopied] = useState(false);
+  const copySource = useCallback(() => {
+    if (!contents) return;
+    void navigator.clipboard
+      .writeText(contents)
+      .then(() => {
+        setJustCopied(true);
+        window.setTimeout(() => setJustCopied(false), 1200);
+      })
+      .catch(() => {
+        // ignore — clipboard API may be blocked in some contexts
+      });
+  }, [contents]);
 
   return (
     <div
@@ -196,16 +238,35 @@ const DesignPreviewSidebar = memo(function DesignPreviewSidebar({
             <span className="text-muted-foreground/70">— waiting for a design</span>
           </div>
         )}
-        <div className="flex shrink-0 items-center gap-0.5">
+        <div className="flex shrink-0 items-center gap-1">
           {selectedIsHtml ? <ViewToggle view={view} onChange={setView} /> : null}
           {showViewportControls ? (
             <ViewportPicker viewport={viewport} onChange={setViewport} />
+          ) : null}
+          {(canCopySource || openInNewTab) && (selectedIsHtml || canCopySource) ? (
+            <span aria-hidden className="mx-0.5 h-4 w-px bg-border" />
+          ) : null}
+          {canCopySource ? (
+            <button
+              type="button"
+              onClick={copySource}
+              aria-label={justCopied ? "Copied" : "Copy source"}
+              title={justCopied ? "Copied" : "Copy source"}
+              className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent/70 hover:text-foreground"
+            >
+              {justCopied ? (
+                <CheckIcon className="size-4 text-success" />
+              ) : (
+                <ClipboardIcon className="size-4" />
+              )}
+            </button>
           ) : null}
           {openInNewTab ? (
             <button
               type="button"
               onClick={openInNewTab}
               aria-label="Open in new tab"
+              title="Open in new tab"
               className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent/70 hover:text-foreground"
             >
               <ArrowUpRightIcon className="size-4" />
@@ -215,6 +276,7 @@ const DesignPreviewSidebar = memo(function DesignPreviewSidebar({
             type="button"
             onClick={() => listQuery.refetch()}
             aria-label="Refresh"
+            title="Refresh"
             className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent/70 hover:text-foreground"
           >
             <RefreshCwIcon className={cn("size-4", listQuery.isFetching && "animate-spin")} />
