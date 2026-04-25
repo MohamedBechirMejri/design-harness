@@ -301,8 +301,6 @@ export default function ChatView(props: ChatViewProps) {
   >({});
   const [pendingUserInputQuestionIndexByRequestId, setPendingUserInputQuestionIndexByRequestId] =
     useState<Record<string, number>>({});
-  const [, setDesignSidebarOpen] = useState(false);
-  const [designSidebarManuallyClosed, setDesignSidebarManuallyClosed] = useState(false);
   const [attachmentPreviewHandoffByMessageId, setAttachmentPreviewHandoffByMessageId] = useState<
     Record<string, string[]>
   >({});
@@ -810,10 +808,6 @@ export default function ChatView(props: ChatViewProps) {
       setDraftThreadContext,
     ],
   );
-  const closeDesignSidebar = useCallback(() => {
-    setDesignSidebarOpen(false);
-    setDesignSidebarManuallyClosed(true);
-  }, []);
 
   const persistThreadSettingsForNextTurn = useCallback(
     async (input: {
@@ -895,45 +889,7 @@ export default function ChatView(props: ChatViewProps) {
     isAtEndRef.current = true;
     showScrollDebouncer.current.cancel();
     setShowScrollToBottom(false);
-    setDesignSidebarOpen(false);
-    setDesignSidebarManuallyClosed(false);
   }, [activeThread?.id]);
-
-  useEffect(() => {
-    if (!activeThread?.id || !activeWorkspaceRoot) return undefined;
-    const threadId = activeThread.id;
-    const cwd = activeWorkspaceRoot;
-    const envId = activeThread.environmentId;
-    let cancelled = false;
-    const check = async () => {
-      const api = readEnvironmentApi(envId);
-      if (!api) return;
-      try {
-        const result = await api.designPreview.list({ cwd, threadId });
-        if (cancelled) return;
-        if (result.entries.length > 0) {
-          setDesignSidebarOpen((open) => {
-            if (open) return open;
-            if (designSidebarManuallyClosed) return open;
-            return true;
-          });
-        }
-      } catch {
-        // Swallow — the directory may not exist yet.
-      }
-    };
-    void check();
-    const interval = window.setInterval(check, 3000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(interval);
-    };
-  }, [
-    activeThread?.id,
-    activeThread?.environmentId,
-    activeWorkspaceRoot,
-    designSidebarManuallyClosed,
-  ]);
 
   // Auto-open the plan sidebar when plan/todo steps arrive for the current turn.
   useEffect(() => {
@@ -1855,7 +1811,6 @@ export default function ChatView(props: ChatViewProps) {
               threadId={activeThread.id}
               workspaceRoot={activeWorkspaceRoot}
               mode="pane"
-              onClose={closeDesignSidebar}
             />
           </div>
         ) : null}

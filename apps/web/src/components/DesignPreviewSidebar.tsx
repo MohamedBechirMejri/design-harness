@@ -1,6 +1,15 @@
 import { memo, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowUpRightIcon, FileIcon, PanelRightCloseIcon, RefreshCwIcon } from "lucide-react";
+import {
+  ArrowUpRightIcon,
+  CodeIcon,
+  EyeIcon,
+  FileIcon,
+  MonitorIcon,
+  RefreshCwIcon,
+  SmartphoneIcon,
+  TabletIcon,
+} from "lucide-react";
 import type { DesignPreviewEntry, EnvironmentId, ThreadId } from "@dh/contracts";
 import { ScrollArea } from "./ui/scroll-area";
 import { cn } from "~/lib/utils";
@@ -14,8 +23,28 @@ interface DesignPreviewSidebarProps {
   threadId: ThreadId;
   workspaceRoot: string | undefined;
   mode?: "sheet" | "sidebar" | "pane";
-  onClose?: () => void;
 }
+
+type ViewportPreset = "auto" | "mobile" | "tablet" | "desktop";
+
+const VIEWPORT_WIDTHS: Record<Exclude<ViewportPreset, "auto">, number> = {
+  mobile: 390,
+  tablet: 820,
+  desktop: 1280,
+};
+
+const VIEWPORT_LABELS: Record<ViewportPreset, string> = {
+  auto: "Fit",
+  mobile: "Mobile",
+  tablet: "Tablet",
+  desktop: "Desktop",
+};
+
+const VIEWPORT_ICON: Record<Exclude<ViewportPreset, "auto">, typeof SmartphoneIcon> = {
+  mobile: SmartphoneIcon,
+  tablet: TabletIcon,
+  desktop: MonitorIcon,
+};
 
 function isHtmlFile(path: string): boolean {
   return /\.(html?|htm)$/i.test(path);
@@ -26,9 +55,10 @@ const DesignPreviewSidebar = memo(function DesignPreviewSidebar({
   threadId,
   workspaceRoot,
   mode = "sidebar",
-  onClose,
 }: DesignPreviewSidebarProps) {
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
+  const [viewport, setViewport] = useState<ViewportPreset>("auto");
+  const [view, setView] = useState<"preview" | "source">("preview");
 
   const listQuery = useQuery({
     queryKey: ["designPreviewList", environmentId, workspaceRoot, threadId],
@@ -114,6 +144,9 @@ const DesignPreviewSidebar = memo(function DesignPreviewSidebar({
         }
       : null;
 
+  const showViewportControls = selectedIsHtml && view === "preview" && hasEntries;
+  const viewportWidth = viewport === "auto" ? null : VIEWPORT_WIDTHS[viewport];
+
   return (
     <div
       className={cn(
@@ -164,6 +197,10 @@ const DesignPreviewSidebar = memo(function DesignPreviewSidebar({
           </div>
         )}
         <div className="flex shrink-0 items-center gap-0.5">
+          {selectedIsHtml ? <ViewToggle view={view} onChange={setView} /> : null}
+          {showViewportControls ? (
+            <ViewportPicker viewport={viewport} onChange={setViewport} />
+          ) : null}
           {openInNewTab ? (
             <button
               type="button"
@@ -182,16 +219,6 @@ const DesignPreviewSidebar = memo(function DesignPreviewSidebar({
           >
             <RefreshCwIcon className={cn("size-4", listQuery.isFetching && "animate-spin")} />
           </button>
-          {mode !== "pane" && onClose ? (
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="Close canvas"
-              className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent/70 hover:text-foreground"
-            >
-              <PanelRightCloseIcon className="size-4" />
-            </button>
-          ) : null}
         </div>
       </div>
 
@@ -216,15 +243,48 @@ const DesignPreviewSidebar = memo(function DesignPreviewSidebar({
           <div className="flex h-full items-center justify-center rounded-2xl border border-destructive/40 bg-destructive/5 px-6 text-center text-[13px] text-destructive">
             Failed to load file.
           </div>
-        ) : selectedIsHtml ? (
-          <div className="flex min-h-0 flex-1 overflow-hidden rounded-2xl border border-border-strong/60 bg-white shadow-soft">
-            <iframe
-              key={`${selectedPath}:${selectedEntry?.modifiedAtMs ?? 0}`}
-              title={`Preview of ${selectedPath}`}
-              sandbox="allow-scripts allow-forms allow-popups"
-              srcDoc={contents}
-              className="h-full w-full border-0 bg-white"
-            />
+        ) : selectedIsHtml && view === "preview" ? (
+          <div
+            className={cn(
+              "flex min-h-0 flex-1 overflow-auto rounded-2xl",
+              viewportWidth === null
+                ? "border border-border-strong/60 bg-white shadow-soft"
+                : "items-start justify-center bg-surface/40 p-4",
+            )}
+          >
+            <div
+              className={cn(
+                "flex min-h-0 overflow-hidden bg-white",
+                viewportWidth === null
+                  ? "h-full w-full"
+                  : "rounded-xl border border-border-strong/60 shadow-soft",
+              )}
+              style={
+                viewportWidth === null
+                  ? undefined
+                  : {
+                      width: `${viewportWidth}px`,
+                      maxWidth: "100%",
+                      minHeight: "100%",
+                    }
+              }
+            >
+              <iframe
+                key={`${selectedPath}:${selectedEntry?.modifiedAtMs ?? 0}`}
+                title={`Preview of ${selectedPath}`}
+                sandbox="allow-scripts allow-forms allow-popups"
+                srcDoc={contents}
+                className="h-full w-full border-0 bg-white"
+                style={
+                  viewportWidth === null
+                    ? undefined
+                    : {
+                        width: `${viewportWidth}px`,
+                        minHeight: "100%",
+                      }
+                }
+              />
+            </div>
           </div>
         ) : (
           <ScrollArea className="h-full rounded-2xl border border-border bg-surface">
@@ -237,6 +297,105 @@ const DesignPreviewSidebar = memo(function DesignPreviewSidebar({
     </div>
   );
 });
+
+interface ViewportPickerProps {
+  viewport: ViewportPreset;
+  onChange: (next: ViewportPreset) => void;
+}
+
+function ViewportPicker({ viewport, onChange }: ViewportPickerProps) {
+  const presets: ReadonlyArray<{
+    value: ViewportPreset;
+    label: string;
+    icon: typeof SmartphoneIcon | null;
+  }> = [
+    { value: "auto", label: VIEWPORT_LABELS.auto, icon: null },
+    { value: "mobile", label: VIEWPORT_LABELS.mobile, icon: VIEWPORT_ICON.mobile },
+    { value: "tablet", label: VIEWPORT_LABELS.tablet, icon: VIEWPORT_ICON.tablet },
+    { value: "desktop", label: VIEWPORT_LABELS.desktop, icon: VIEWPORT_ICON.desktop },
+  ];
+
+  return (
+    <div
+      role="group"
+      aria-label="Preview viewport"
+      className="ml-1 inline-flex items-center gap-0.5 rounded-md bg-accent/40 p-0.5"
+    >
+      {presets.map(({ value, label, icon: Icon }) => {
+        const isActive = viewport === value;
+        const titleSuffix =
+          value === "auto"
+            ? ""
+            : ` (${VIEWPORT_WIDTHS[value as Exclude<ViewportPreset, "auto">]}px)`;
+        return (
+          <button
+            key={value}
+            type="button"
+            onClick={() => onChange(value)}
+            aria-label={`${label}${titleSuffix}`}
+            title={`${label}${titleSuffix}`}
+            aria-pressed={isActive}
+            className={cn(
+              "inline-flex h-6 items-center gap-1 rounded px-1.5 text-[11px] font-medium transition-colors",
+              isActive
+                ? "bg-background text-foreground shadow-soft"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {Icon ? <Icon className="size-3" aria-hidden /> : null}
+            <span>{label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+interface ViewToggleProps {
+  view: "preview" | "source";
+  onChange: (next: "preview" | "source") => void;
+}
+
+function ViewToggle({ view, onChange }: ViewToggleProps) {
+  return (
+    <div
+      role="group"
+      aria-label="Preview / source"
+      className="inline-flex items-center gap-0.5 rounded-md bg-accent/40 p-0.5"
+    >
+      <button
+        type="button"
+        onClick={() => onChange("preview")}
+        aria-label="Preview"
+        title="Preview"
+        aria-pressed={view === "preview"}
+        className={cn(
+          "inline-flex size-6 items-center justify-center rounded text-[11px] transition-colors",
+          view === "preview"
+            ? "bg-background text-foreground shadow-soft"
+            : "text-muted-foreground hover:text-foreground",
+        )}
+      >
+        <EyeIcon className="size-3.5" aria-hidden />
+      </button>
+      <button
+        type="button"
+        onClick={() => onChange("source")}
+        aria-label="Source"
+        title="Source"
+        aria-pressed={view === "source"}
+        className={cn(
+          "inline-flex size-6 items-center justify-center rounded text-[11px] transition-colors",
+          view === "source"
+            ? "bg-background text-foreground shadow-soft"
+            : "text-muted-foreground hover:text-foreground",
+        )}
+      >
+        <CodeIcon className="size-3.5" aria-hidden />
+      </button>
+    </div>
+  );
+}
 
 interface CanvasEmptyStateProps {
   isError: boolean;
