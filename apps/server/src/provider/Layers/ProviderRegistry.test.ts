@@ -318,7 +318,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest()))(
 
       it("preserves previously discovered provider models when a refresh returns none", () => {
         const previousProvider = {
-          provider: "cursor",
+          provider: "claudeAgent",
           status: "ready",
           enabled: true,
           installed: true,
@@ -355,7 +355,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest()))(
 
       it("fills missing capabilities from the previous provider snapshot", () => {
         const previousProvider = {
-          provider: "cursor",
+          provider: "claudeAgent",
           status: "ready",
           enabled: true,
           installed: true,
@@ -411,7 +411,6 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest()))(
               deepMerge(DEFAULT_SERVER_SETTINGS, {
                 providers: {
                   codex: { enabled: false },
-                  cursor: { enabled: false },
                 },
               }),
             ),
@@ -465,77 +464,6 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest()))(
             );
           }).pipe(Effect.provide(runtimeServices));
         }),
-      );
-
-      it.effect(
-        "keeps cursor disabled and skips probing when the provider setting is disabled",
-        () =>
-          Effect.gen(function* () {
-            const serverSettings = yield* makeMutableServerSettingsService(
-              Schema.decodeSync(ServerSettings)(
-                deepMerge(DEFAULT_SERVER_SETTINGS, {
-                  providers: {
-                    codex: {
-                      enabled: false,
-                    },
-                    cursor: {
-                      enabled: false,
-                    },
-                  },
-                }),
-              ),
-            );
-            let cursorSpawned = false;
-            const scope = yield* Scope.make();
-            yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void));
-            const providerRegistryLayer = ProviderRegistryLive.pipe(
-              Layer.provideMerge(Layer.succeed(ServerSettingsService, serverSettings)),
-              Layer.provideMerge(
-                ServerConfig.layerTest(process.cwd(), {
-                  prefix: "t3-provider-registry-",
-                }),
-              ),
-              Layer.provideMerge(
-                mockCommandSpawnerLayer((command, args) => {
-                  if (command === "agent") {
-                    cursorSpawned = true;
-                  }
-                  const joined = args.join(" ");
-                  if (joined === "--version") {
-                    return { stdout: `${command} 1.0.0\n`, stderr: "", code: 0 };
-                  }
-                  if (joined === "auth status") {
-                    return { stdout: '{"authenticated":true}\n', stderr: "", code: 0 };
-                  }
-                  throw new Error(`Unexpected args: ${command} ${joined}`);
-                }),
-              ),
-            );
-            const runtimeServices = yield* Layer.build(
-              Layer.mergeAll(
-                Layer.succeed(ServerSettingsService, serverSettings),
-                providerRegistryLayer,
-              ),
-            ).pipe(Scope.provide(scope));
-
-            yield* Effect.gen(function* () {
-              const registry = yield* ProviderRegistry;
-              const providers = yield* registry.getProviders;
-              const cursorProvider = providers.find((provider) => provider.provider === "cursor");
-
-              assert.deepStrictEqual(
-                providers.map((provider) => provider.provider),
-                ["codex", "claudeAgent", "opencode", "cursor"],
-              );
-              assert.strictEqual(cursorProvider?.enabled, false);
-              assert.strictEqual(cursorProvider?.status, "disabled");
-              assert.strictEqual(
-                cursorProvider?.message,
-                "Cursor is disabled in Design Harness settings.",
-              );
-              assert.strictEqual(cursorSpawned, false);
-            }).pipe(Effect.provide(runtimeServices));
-          }),
       );
 
       it.effect("skips codex probes entirely when the provider is disabled", () =>

@@ -6,11 +6,11 @@ describe("buildModelPickerSearchText", () => {
   it("builds provider-agnostic search text from generic fields", () => {
     expect(
       buildModelPickerSearchText({
-        provider: "opencode",
+        provider: "claudeAgent",
         name: "Claude Opus 4.7",
         subProvider: "GitHub Copilot",
       }),
-    ).toBe("claude opus 4.7 github copilot opencode opencode");
+    ).toBe("claude opus 4.7 github copilot claudeagent claude");
   });
 });
 
@@ -19,7 +19,7 @@ describe("scoreModelPickerSearch", () => {
     expect(
       scoreModelPickerSearch(
         {
-          provider: "opencode",
+          provider: "claudeAgent",
           name: "Claude Opus 4.7",
           subProvider: "GitHub Copilot",
         },
@@ -43,7 +43,7 @@ describe("scoreModelPickerSearch", () => {
   it("ranks exact token matches ahead of fuzzier matches", () => {
     const exactScore = scoreModelPickerSearch(
       {
-        provider: "opencode",
+        provider: "claudeAgent",
         name: "Claude Opus 4.7",
         subProvider: "GitHub Copilot",
       },
@@ -51,7 +51,7 @@ describe("scoreModelPickerSearch", () => {
     );
     const fuzzyScore = scoreModelPickerSearch(
       {
-        provider: "opencode",
+        provider: "claudeAgent",
         name: "Claude Opus 4.7",
         subProvider: "GitHub Copilot",
       },
@@ -74,7 +74,7 @@ describe("scoreModelPickerSearch", () => {
     );
     const nonFavoriteScore = scoreModelPickerSearch(
       {
-        provider: "cursor",
+        provider: "claudeAgent",
         name: "Opus 4.5",
       },
       "opu",
@@ -96,7 +96,7 @@ describe("scoreModelPickerSearch", () => {
     );
     const nonFavoriteExactScore = scoreModelPickerSearch(
       {
-        provider: "cursor",
+        provider: "claudeAgent",
         name: "Opus 4.7",
       },
       "opus 4.7",

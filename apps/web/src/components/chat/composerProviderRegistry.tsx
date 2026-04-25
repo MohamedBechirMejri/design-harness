@@ -106,23 +106,14 @@ function getProviderStateFromCapabilities(
       ? providerOptions.effort
       : "reasoningEffort" in providerOptions
         ? providerOptions.reasoningEffort
-        : "reasoning" in providerOptions
-          ? providerOptions.reasoning
-          : "variant" in providerOptions
-            ? providerOptions.variant
-            : null
+        : null
     : null;
   const normalizedOptions = normalizeProviderModelOptionsWithCapabilities(
     provider,
     caps,
     providerOptions,
   );
-  const promptEffort =
-    provider === "opencode"
-      ? (trimOrNull(
-          normalizedOptions && "variant" in normalizedOptions ? normalizedOptions.variant : null,
-        ) ?? null)
-      : (resolveEffort(caps, rawEffort) ?? null);
+  const promptEffort = resolveEffort(caps, rawEffort) ?? null;
   const ultrathinkActive =
     caps.promptInjectedEffortLevels.length > 0 && isClaudeUltrathinkPrompt(prompt);
 
@@ -161,10 +152,6 @@ function createProviderRegistryEntry(
 const composerProviderRegistry: Record<ProviderKind, ProviderRegistryEntry> = {
   codex: createProviderRegistryEntry("codex", { showDesignModeToggle: true }),
   claudeAgent: createProviderRegistryEntry("claudeAgent", { showDesignModeToggle: true }),
-  cursor: createProviderRegistryEntry("cursor"),
-  opencode: createProviderRegistryEntry("opencode", {
-    showInteractionModeToggle: false,
-  }),
 };
 
 export function getComposerProviderState(input: ComposerProviderStateInput): ComposerProviderState {

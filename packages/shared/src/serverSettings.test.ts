@@ -126,13 +126,13 @@ describe("serverSettings helpers", () => {
     expect(
       applyServerSettingsPatch(current, {
         textGenerationModelSelection: {
-          provider: "opencode",
-          model: "openai/gpt-5",
+          provider: "claudeAgent",
+          model: "claude-haiku-4-5",
         },
       }).textGenerationModelSelection,
     ).toEqual({
-      provider: "opencode",
-      model: "openai/gpt-5",
+      provider: "claudeAgent",
+      model: "claude-haiku-4-5",
     });
   });
 });

@@ -2,8 +2,6 @@ import {
   ServerSettings,
   type ClaudeModelOptions,
   type CodexModelOptions,
-  type CursorModelOptions,
-  type OpenCodeModelOptions,
   type ServerSettingsPatch,
 } from "@dh/contracts";
 import { Schema } from "effect";
@@ -83,28 +81,10 @@ export function applyServerSettingsPatch(
             model,
             ...withModelSelectionOptions(selectionPatch.options as CodexModelOptions | undefined),
           }
-        : provider === "claudeAgent"
-          ? {
-              provider,
-              model,
-              ...withModelSelectionOptions(
-                selectionPatch.options as ClaudeModelOptions | undefined,
-              ),
-            }
-          : provider === "cursor"
-            ? {
-                provider,
-                model,
-                ...withModelSelectionOptions(
-                  selectionPatch.options as CursorModelOptions | undefined,
-                ),
-              }
-            : {
-                provider,
-                model,
-                ...withModelSelectionOptions(
-                  selectionPatch.options as OpenCodeModelOptions | undefined,
-                ),
-              },
+        : {
+            provider,
+            model,
+            ...withModelSelectionOptions(selectionPatch.options as ClaudeModelOptions | undefined),
+          },
   };
 }
