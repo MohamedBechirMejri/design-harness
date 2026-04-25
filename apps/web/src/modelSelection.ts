@@ -1,11 +1,5 @@
-import {
-  DEFAULT_GIT_TEXT_GENERATION_MODEL_BY_PROVIDER,
-  type ModelSelection,
-  type ProviderKind,
-  type ServerProvider,
-} from "@dh/contracts";
-import { createModelSelection, normalizeModelSlug, resolveSelectableModel } from "@dh/shared/model";
-import { getComposerProviderState } from "./components/chat/composerProviderRegistry";
+import { type ProviderKind, type ServerProvider } from "@dh/contracts";
+import { normalizeModelSlug, resolveSelectableModel } from "@dh/shared/model";
 import { UnifiedSettings } from "@dh/contracts/settings";
 import {
   getDefaultServerModel,
@@ -171,31 +165,4 @@ export function getCustomModelOptionsByProvider(
       selectedProvider === "claudeAgent" ? selectedModel : undefined,
     ),
   };
-}
-
-export function resolveAppModelSelectionState(
-  settings: UnifiedSettings,
-  providers: ReadonlyArray<ServerProvider>,
-): ModelSelection {
-  const selection = settings.textGenerationModelSelection ?? {
-    provider: "codex" as const,
-    model: DEFAULT_GIT_TEXT_GENERATION_MODEL_BY_PROVIDER.codex,
-  };
-  const provider = resolveSelectableProvider(providers, selection.provider);
-
-  // When the provider changed due to fallback (e.g. selected provider was disabled),
-  // don't carry over the old provider's model — use the fallback provider's default.
-  const selectedModel = provider === selection.provider ? selection.model : null;
-  const model = resolveAppModelSelection(provider, settings, providers, selectedModel);
-  const { modelOptionsForDispatch } = getComposerProviderState({
-    provider,
-    model,
-    models: getProviderModels(providers, provider),
-    prompt: "",
-    modelOptions: {
-      [provider]: provider === selection.provider ? selection.options : undefined,
-    },
-  });
-
-  return createModelSelection(provider, model, modelOptionsForDispatch);
 }

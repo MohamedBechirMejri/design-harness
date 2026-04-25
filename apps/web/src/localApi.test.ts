@@ -257,7 +257,6 @@ const baseGitStatus: GitStatusResult = {
   hasUpstream: true,
   aheadCount: 0,
   behindCount: 0,
-  pr: null,
 };
 
 beforeEach(() => {

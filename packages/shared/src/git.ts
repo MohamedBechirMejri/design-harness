@@ -260,7 +260,6 @@ const EMPTY_GIT_STATUS_REMOTE: GitStatusRemoteResult = {
   hasUpstream: false,
   aheadCount: 0,
   behindCount: 0,
-  pr: null,
 };
 
 export function mergeGitStatusParts(
@@ -278,7 +277,6 @@ function toRemoteStatusPart(status: GitStatusResult): GitStatusRemoteResult {
     hasUpstream: status.hasUpstream,
     aheadCount: status.aheadCount,
     behindCount: status.behindCount,
-    pr: status.pr,
   };
 }
 

@@ -1,16 +1,13 @@
 import {
-  type AuthSessionRole,
   type EnvironmentId,
   type OrchestrationEvent,
   type OrchestrationShellSnapshot,
   type OrchestrationShellStreamEvent,
-  type ServerConfig,
   ThreadId,
 } from "@dh/contracts";
 import { type QueryClient } from "@tanstack/react-query";
 import { Throttler } from "@tanstack/react-pacer";
 import {
-  createKnownEnvironment,
   getKnownEnvironmentWsBaseUrl,
   scopedThreadKey,
   scopeProjectRef,
@@ -22,31 +19,10 @@ import {
   markPromotedDraftThreadsByRef,
   useComposerDraftStore,
 } from "~/composerDraftStore";
-import { ensureLocalApi } from "~/localApi";
 import { deriveOrchestrationBatchEffects } from "~/orchestrationEventEffects";
 import { projectQueryKeys } from "~/lib/projectReactQuery";
 import { providerQueryKeys } from "~/lib/providerReactQuery";
 import { getPrimaryKnownEnvironment } from "../primary";
-import {
-  bootstrapRemoteBearerSession,
-  fetchRemoteEnvironmentDescriptor,
-  fetchRemoteSessionState,
-  resolveRemoteWebSocketConnectionUrl,
-} from "../remote/api";
-import { resolveRemotePairingTarget } from "../remote/target";
-import {
-  getSavedEnvironmentRecord,
-  hasSavedEnvironmentRegistryHydrated,
-  listSavedEnvironmentRecords,
-  persistSavedEnvironmentRecord,
-  readSavedEnvironmentBearerToken,
-  removeSavedEnvironmentBearerToken,
-  type SavedEnvironmentRecord,
-  useSavedEnvironmentRegistryStore,
-  useSavedEnvironmentRuntimeStore,
-  waitForSavedEnvironmentRegistryHydration,
-  writeSavedEnvironmentBearerToken,
-} from "./catalog";
 import { createEnvironmentConnection, type EnvironmentConnection } from "./connection";
 import {
   useStore,
@@ -57,7 +33,7 @@ import {
 } from "~/store";
 import { useUiStateStore } from "~/uiStateStore";
 import { WsTransport } from "../../rpc/wsTransport";
-import { createWsRpcClient, type WsRpcClient } from "../../rpc/wsRpcClient";
+import { createWsRpcClient } from "../../rpc/wsRpcClient";
 import {
   deriveLogicalProjectKeyFromSettings,
   derivePhysicalProjectKey,
@@ -217,14 +193,6 @@ function disposeThreadDetailSubscriptionByKey(key: string): boolean {
   return true;
 }
 
-function disposeThreadDetailSubscriptionsForEnvironment(environmentId: EnvironmentId): void {
-  for (const [key, entry] of threadDetailSubscriptions) {
-    if (entry.environmentId === environmentId) {
-      disposeThreadDetailSubscriptionByKey(key);
-    }
-  }
-}
-
 function reconcileThreadDetailSubscriptionsForEnvironment(
   environmentId: EnvironmentId,
   threadIds: ReadonlyArray<ThreadId>,
@@ -376,58 +344,6 @@ function emitEnvironmentConnectionRegistryChange() {
   for (const listener of environmentConnectionListeners) {
     listener();
   }
-}
-
-function getRuntimeErrorFields(error: unknown) {
-  return {
-    lastError: error instanceof Error ? error.message : String(error),
-    lastErrorAt: new Date().toISOString(),
-  } as const;
-}
-
-function isoNow(): string {
-  return new Date().toISOString();
-}
-
-function setRuntimeConnecting(environmentId: EnvironmentId) {
-  useSavedEnvironmentRuntimeStore.getState().patch(environmentId, {
-    connectionState: "connecting",
-    lastError: null,
-    lastErrorAt: null,
-  });
-}
-
-function setRuntimeConnected(environmentId: EnvironmentId) {
-  const connectedAt = isoNow();
-  useSavedEnvironmentRuntimeStore.getState().patch(environmentId, {
-    connectionState: "connected",
-    authState: "authenticated",
-    connectedAt,
-    disconnectedAt: null,
-    lastError: null,
-    lastErrorAt: null,
-  });
-  useSavedEnvironmentRegistryStore.getState().markConnected(environmentId, connectedAt);
-}
-
-function setRuntimeDisconnected(environmentId: EnvironmentId, reason?: string | null) {
-  useSavedEnvironmentRuntimeStore.getState().patch(environmentId, {
-    connectionState: "disconnected",
-    disconnectedAt: isoNow(),
-    ...(reason && reason.trim().length > 0
-      ? {
-          lastError: reason,
-          lastErrorAt: isoNow(),
-        }
-      : {}),
-  });
-}
-
-function setRuntimeError(environmentId: EnvironmentId, error: unknown) {
-  useSavedEnvironmentRuntimeStore.getState().patch(environmentId, {
-    connectionState: "error",
-    ...getRuntimeErrorFields(error),
-  });
 }
 
 function coalesceOrchestrationUiEvents(
@@ -635,65 +551,6 @@ function createPrimaryEnvironmentClient(
   return createWsRpcClient(new WsTransport(wsBaseUrl));
 }
 
-function createSavedEnvironmentClient(
-  record: SavedEnvironmentRecord,
-  bearerToken: string,
-): WsRpcClient {
-  useSavedEnvironmentRuntimeStore.getState().ensure(record.environmentId);
-
-  return createWsRpcClient(
-    new WsTransport(
-      () =>
-        resolveRemoteWebSocketConnectionUrl({
-          wsBaseUrl: record.wsBaseUrl,
-          httpBaseUrl: record.httpBaseUrl,
-          bearerToken,
-        }),
-      {
-        onAttempt: () => {
-          setRuntimeConnecting(record.environmentId);
-        },
-        onOpen: () => {
-          setRuntimeConnected(record.environmentId);
-        },
-        onError: (message: string) => {
-          useSavedEnvironmentRuntimeStore.getState().patch(record.environmentId, {
-            connectionState: "error",
-            lastError: message,
-            lastErrorAt: isoNow(),
-          });
-        },
-        onClose: (details: { readonly code: number; readonly reason: string }) => {
-          setRuntimeDisconnected(record.environmentId, details.reason);
-        },
-      },
-    ),
-  );
-}
-
-async function refreshSavedEnvironmentMetadata(
-  record: SavedEnvironmentRecord,
-  bearerToken: string,
-  client: WsRpcClient,
-  roleHint?: AuthSessionRole | null,
-  configHint?: ServerConfig | null,
-): Promise<void> {
-  const [serverConfig, sessionState] = await Promise.all([
-    configHint ? Promise.resolve(configHint) : client.server.getConfig(),
-    fetchRemoteSessionState({
-      httpBaseUrl: record.httpBaseUrl,
-      bearerToken,
-    }),
-  ]);
-
-  useSavedEnvironmentRuntimeStore.getState().patch(record.environmentId, {
-    authState: sessionState.authenticated ? "authenticated" : "requires-auth",
-    descriptor: serverConfig.environment,
-    serverConfig,
-    role: sessionState.authenticated ? (sessionState.role ?? roleHint ?? null) : null,
-  });
-}
-
 function registerConnection(connection: EnvironmentConnection): EnvironmentConnection {
   const existing = environmentConnections.get(connection.environmentId);
   if (existing && existing !== connection) {
@@ -710,7 +567,11 @@ async function removeConnection(environmentId: EnvironmentId): Promise<boolean> 
     return false;
   }
 
-  disposeThreadDetailSubscriptionsForEnvironment(environmentId);
+  for (const [key, entry] of threadDetailSubscriptions) {
+    if (entry.environmentId === environmentId) {
+      disposeThreadDetailSubscriptionByKey(key);
+    }
+  }
   environmentConnections.delete(environmentId);
   emitEnvironmentConnectionRegistryChange();
   await connection.dispose();
@@ -735,102 +596,6 @@ function createPrimaryEnvironmentConnection(): EnvironmentConnection {
       client: createPrimaryEnvironmentClient(knownEnvironment),
       ...createEnvironmentConnectionHandlers(),
     }),
-  );
-}
-
-async function ensureSavedEnvironmentConnection(
-  record: SavedEnvironmentRecord,
-  options?: {
-    readonly client?: WsRpcClient;
-    readonly bearerToken?: string;
-    readonly role?: AuthSessionRole | null;
-    readonly serverConfig?: ServerConfig | null;
-  },
-): Promise<EnvironmentConnection> {
-  const existing = environmentConnections.get(record.environmentId);
-  if (existing) {
-    return existing;
-  }
-
-  const bearerToken =
-    options?.bearerToken ?? (await readSavedEnvironmentBearerToken(record.environmentId));
-  if (!bearerToken) {
-    useSavedEnvironmentRuntimeStore.getState().patch(record.environmentId, {
-      authState: "requires-auth",
-      role: null,
-      connectionState: "disconnected",
-      lastError: "Saved environment is missing its saved credential. Pair it again.",
-      lastErrorAt: isoNow(),
-    });
-    throw new Error("Saved environment is missing its saved credential.");
-  }
-
-  const client = options?.client ?? createSavedEnvironmentClient(record, bearerToken);
-  const knownEnvironment = createKnownEnvironment({
-    id: record.environmentId,
-    label: record.label,
-    source: "manual",
-    target: {
-      httpBaseUrl: record.httpBaseUrl,
-      wsBaseUrl: record.wsBaseUrl,
-    },
-  });
-  const connection = createEnvironmentConnection({
-    kind: "saved",
-    knownEnvironment: {
-      ...knownEnvironment,
-      environmentId: record.environmentId,
-    },
-    client,
-    refreshMetadata: async () => {
-      await refreshSavedEnvironmentMetadata(record, bearerToken, client);
-    },
-    onConfigSnapshot: (config) => {
-      useSavedEnvironmentRuntimeStore.getState().patch(record.environmentId, {
-        descriptor: config.environment,
-        serverConfig: config,
-      });
-    },
-    onWelcome: (payload) => {
-      useSavedEnvironmentRuntimeStore.getState().patch(record.environmentId, {
-        descriptor: payload.environment,
-      });
-    },
-    ...createEnvironmentConnectionHandlers(),
-  });
-
-  registerConnection(connection);
-
-  try {
-    await refreshSavedEnvironmentMetadata(
-      record,
-      bearerToken,
-      client,
-      options?.role ?? null,
-      options?.serverConfig ?? null,
-    );
-    return connection;
-  } catch (error) {
-    setRuntimeError(record.environmentId, error);
-    await removeConnection(record.environmentId).catch(() => false);
-    throw error;
-  }
-}
-
-async function syncSavedEnvironmentConnections(
-  records: ReadonlyArray<SavedEnvironmentRecord>,
-): Promise<void> {
-  const expectedEnvironmentIds = new Set(records.map((record) => record.environmentId));
-  const staleEnvironmentIds = [...environmentConnections.values()]
-    .filter((connection) => connection.kind === "saved")
-    .map((connection) => connection.environmentId)
-    .filter((environmentId) => !expectedEnvironmentIds.has(environmentId));
-
-  await Promise.all(
-    staleEnvironmentIds.map((environmentId) => disconnectSavedEnvironment(environmentId)),
-  );
-  await Promise.all(
-    records.map((record) => ensureSavedEnvironmentConnection(record).catch(() => undefined)),
   );
 }
 
@@ -866,103 +631,6 @@ export function requireEnvironmentConnection(environmentId: EnvironmentId): Envi
 
 export function getPrimaryEnvironmentConnection(): EnvironmentConnection {
   return createPrimaryEnvironmentConnection();
-}
-
-export async function disconnectSavedEnvironment(environmentId: EnvironmentId): Promise<void> {
-  const connection = environmentConnections.get(environmentId);
-  if (connection?.kind !== "saved") {
-    return;
-  }
-
-  useSavedEnvironmentRuntimeStore.getState().clear(environmentId);
-  await removeConnection(environmentId).catch(() => false);
-}
-
-export async function reconnectSavedEnvironment(environmentId: EnvironmentId): Promise<void> {
-  const record = getSavedEnvironmentRecord(environmentId);
-  if (!record) {
-    throw new Error("Saved environment not found.");
-  }
-
-  const connection = environmentConnections.get(environmentId);
-  if (!connection) {
-    await ensureSavedEnvironmentConnection(record);
-    return;
-  }
-
-  setRuntimeConnecting(environmentId);
-  try {
-    await connection.reconnect();
-  } catch (error) {
-    setRuntimeError(environmentId, error);
-    throw error;
-  }
-}
-
-export async function removeSavedEnvironment(environmentId: EnvironmentId): Promise<void> {
-  useSavedEnvironmentRegistryStore.getState().remove(environmentId);
-  await removeSavedEnvironmentBearerToken(environmentId);
-  await disconnectSavedEnvironment(environmentId);
-}
-
-export async function addSavedEnvironment(input: {
-  readonly label: string;
-  readonly pairingUrl?: string;
-  readonly host?: string;
-  readonly pairingCode?: string;
-}): Promise<SavedEnvironmentRecord> {
-  const resolvedTarget = resolveRemotePairingTarget({
-    ...(input.pairingUrl !== undefined ? { pairingUrl: input.pairingUrl } : {}),
-    ...(input.host !== undefined ? { host: input.host } : {}),
-    ...(input.pairingCode !== undefined ? { pairingCode: input.pairingCode } : {}),
-  });
-  const descriptor = await fetchRemoteEnvironmentDescriptor({
-    httpBaseUrl: resolvedTarget.httpBaseUrl,
-  });
-  const environmentId = descriptor.environmentId;
-
-  if (environmentConnections.has(environmentId)) {
-    throw new Error("This environment is already connected.");
-  }
-
-  const bearerSession = await bootstrapRemoteBearerSession({
-    httpBaseUrl: resolvedTarget.httpBaseUrl,
-    credential: resolvedTarget.credential,
-  });
-
-  const record: SavedEnvironmentRecord = {
-    environmentId,
-    label: input.label.trim() || descriptor.label,
-    wsBaseUrl: resolvedTarget.wsBaseUrl,
-    httpBaseUrl: resolvedTarget.httpBaseUrl,
-    createdAt: isoNow(),
-    lastConnectedAt: isoNow(),
-  };
-
-  await persistSavedEnvironmentRecord(record);
-  const didPersistBearerToken = await writeSavedEnvironmentBearerToken(
-    environmentId,
-    bearerSession.sessionToken,
-  );
-  if (!didPersistBearerToken) {
-    await ensureLocalApi().persistence.setSavedEnvironmentRegistry(
-      listSavedEnvironmentRecords().map((entry) => ({
-        environmentId: entry.environmentId,
-        label: entry.label,
-        httpBaseUrl: entry.httpBaseUrl,
-        wsBaseUrl: entry.wsBaseUrl,
-        createdAt: entry.createdAt,
-        lastConnectedAt: entry.lastConnectedAt,
-      })),
-    );
-    throw new Error("Unable to persist saved environment credentials.");
-  }
-  await ensureSavedEnvironmentConnection(record, {
-    bearerToken: bearerSession.sessionToken,
-    role: bearerSession.role,
-  });
-  useSavedEnvironmentRegistryStore.getState().upsert(record);
-  return record;
 }
 
 export async function ensureEnvironmentConnectionBootstrapped(
@@ -1005,23 +673,11 @@ export function startEnvironmentConnectionService(queryClient: QueryClient): () 
 
   createPrimaryEnvironmentConnection();
 
-  const unsubscribeSavedEnvironments = useSavedEnvironmentRegistryStore.subscribe(() => {
-    if (!hasSavedEnvironmentRegistryHydrated()) {
-      return;
-    }
-    void syncSavedEnvironmentConnections(listSavedEnvironmentRecords());
-  });
-
-  void waitForSavedEnvironmentRegistryHydration()
-    .then(() => syncSavedEnvironmentConnections(listSavedEnvironmentRecords()))
-    .catch(() => undefined);
-
   activeService = {
     queryClient,
     queryInvalidationThrottler,
     refCount: 1,
     stop: () => {
-      unsubscribeSavedEnvironments();
       queryInvalidationThrottler.cancel();
     },
   };

@@ -2283,7 +2283,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
                   hasUpstream: true,
                   aheadCount: 0,
                   behindCount: 0,
-                  pr: null,
                 };
               }),
             status: () =>
@@ -2299,7 +2298,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
                   hasUpstream: true,
                   aheadCount: 0,
                   behindCount: 0,
-                  pr: null,
                 };
               }),
           },
@@ -2349,7 +2347,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
                   hasUpstream: true,
                   aheadCount: 0,
                   behindCount: 0,
-                  pr: null,
                 }),
               ),
           },

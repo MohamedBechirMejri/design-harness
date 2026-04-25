@@ -31,7 +31,6 @@ const baseRemoteStatus: GitStatusRemoteResult = {
   hasUpstream: true,
   aheadCount: 0,
   behindCount: 0,
-  pr: null,
 };
 
 describe("wsRpcClient", () => {
@@ -83,7 +82,6 @@ describe("wsRpcClient", () => {
           hasUpstream: false,
           aheadCount: 0,
           behindCount: 0,
-          pr: null,
         },
       ],
       [

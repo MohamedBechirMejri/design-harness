@@ -82,10 +82,6 @@ function RootRouteView() {
     };
   }, [pathname]);
 
-  if (pathname === "/pair") {
-    return <Outlet />;
-  }
-
   if (authGateState.status !== "authenticated") {
     return <Outlet />;
   }

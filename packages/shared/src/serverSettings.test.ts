@@ -1,7 +1,5 @@
-import { DEFAULT_SERVER_SETTINGS } from "@dh/contracts";
 import { describe, expect, it } from "vitest";
 import {
-  applyServerSettingsPatch,
   extractPersistedServerObservabilitySettings,
   normalizePersistedServerSettingString,
   parsePersistedServerObservabilitySettings,
@@ -50,89 +48,6 @@ describe("serverSettings helpers", () => {
     expect(parsePersistedServerObservabilitySettings("{")).toEqual({
       otlpTracesUrl: undefined,
       otlpMetricsUrl: undefined,
-    });
-  });
-
-  it("replaces text generation selection when provider/model are provided", () => {
-    const current = {
-      ...DEFAULT_SERVER_SETTINGS,
-      textGenerationModelSelection: {
-        provider: "codex" as const,
-        model: "gpt-5.4-mini",
-        options: {
-          reasoningEffort: "high" as const,
-          fastMode: true,
-        },
-      },
-    };
-
-    expect(
-      applyServerSettingsPatch(current, {
-        textGenerationModelSelection: {
-          provider: "codex",
-          model: "gpt-5.4-mini",
-        },
-      }).textGenerationModelSelection,
-    ).toEqual({
-      provider: "codex",
-      model: "gpt-5.4-mini",
-    });
-  });
-
-  it("still deep merges text generation selection when only options are provided", () => {
-    const current = {
-      ...DEFAULT_SERVER_SETTINGS,
-      textGenerationModelSelection: {
-        provider: "codex" as const,
-        model: "gpt-5.4-mini",
-        options: {
-          reasoningEffort: "high" as const,
-          fastMode: true,
-        },
-      },
-    };
-
-    expect(
-      applyServerSettingsPatch(current, {
-        textGenerationModelSelection: {
-          options: {
-            fastMode: false,
-          },
-        },
-      }).textGenerationModelSelection,
-    ).toEqual({
-      provider: "codex",
-      model: "gpt-5.4-mini",
-      options: {
-        reasoningEffort: "high",
-        fastMode: false,
-      },
-    });
-  });
-
-  it("replaces text generation selection across providers without leaking stale options", () => {
-    const current = {
-      ...DEFAULT_SERVER_SETTINGS,
-      textGenerationModelSelection: {
-        provider: "codex" as const,
-        model: "gpt-5.4-mini",
-        options: {
-          reasoningEffort: "high" as const,
-          fastMode: true,
-        },
-      },
-    };
-
-    expect(
-      applyServerSettingsPatch(current, {
-        textGenerationModelSelection: {
-          provider: "claudeAgent",
-          model: "claude-haiku-4-5",
-        },
-      }).textGenerationModelSelection,
-    ).toEqual({
-      provider: "claudeAgent",
-      model: "claude-haiku-4-5",
     });
   });
 });

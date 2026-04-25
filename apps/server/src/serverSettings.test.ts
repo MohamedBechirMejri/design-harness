@@ -1,5 +1,5 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { DEFAULT_SERVER_SETTINGS, ServerSettingsPatch } from "@dh/contracts";
+import { ServerSettingsPatch } from "@dh/contracts";
 import { assert, it } from "@effect/vitest";
 import { Effect, FileSystem, Layer, Schema } from "effect";
 import { ServerConfig } from "./config.ts";
@@ -24,23 +24,6 @@ it.layer(NodeServices.layer)("server settings", (it) => {
       assert.deepEqual(decodePatch({ providers: { codex: { binaryPath: "/tmp/codex" } } }), {
         providers: { codex: { binaryPath: "/tmp/codex" } },
       });
-
-      assert.deepEqual(
-        decodePatch({
-          textGenerationModelSelection: {
-            options: {
-              fastMode: false,
-            },
-          },
-        }),
-        {
-          textGenerationModelSelection: {
-            options: {
-              fastMode: false,
-            },
-          },
-        },
-      );
     }),
   );
 
@@ -59,25 +42,12 @@ it.layer(NodeServices.layer)("server settings", (it) => {
             customModels: ["claude-custom"],
           },
         },
-        textGenerationModelSelection: {
-          provider: "codex",
-          model: DEFAULT_SERVER_SETTINGS.textGenerationModelSelection.model,
-          options: {
-            reasoningEffort: "high",
-            fastMode: true,
-          },
-        },
       });
 
       const next = yield* serverSettings.updateSettings({
         providers: {
           codex: {
             binaryPath: "/opt/homebrew/bin/codex",
-          },
-        },
-        textGenerationModelSelection: {
-          options: {
-            fastMode: false,
           },
         },
       });
@@ -93,80 +63,6 @@ it.layer(NodeServices.layer)("server settings", (it) => {
         binaryPath: "/usr/local/bin/claude",
         customModels: ["claude-custom"],
         launchArgs: "",
-      });
-      assert.deepEqual(next.textGenerationModelSelection, {
-        provider: "codex",
-        model: DEFAULT_SERVER_SETTINGS.textGenerationModelSelection.model,
-        options: {
-          reasoningEffort: "high",
-          fastMode: false,
-        },
-      });
-    }).pipe(Effect.provide(makeServerSettingsLayer())),
-  );
-
-  it.effect("preserves model when switching providers via textGenerationModelSelection", () =>
-    Effect.gen(function* () {
-      const serverSettings = yield* ServerSettingsService;
-
-      // Start with Claude text generation selection
-      yield* serverSettings.updateSettings({
-        textGenerationModelSelection: {
-          provider: "claudeAgent",
-          model: "claude-sonnet-4-6",
-          options: {
-            effort: "high",
-          },
-        },
-      });
-
-      // Switch to Codex — the stale Claude "effort" in options must not
-      // cause the update to lose the selected model.
-      const next = yield* serverSettings.updateSettings({
-        textGenerationModelSelection: {
-          provider: "codex",
-          model: "gpt-5.4",
-          options: {
-            reasoningEffort: "high",
-          },
-        },
-      });
-
-      assert.deepEqual(next.textGenerationModelSelection, {
-        provider: "codex",
-        model: "gpt-5.4",
-        options: {
-          reasoningEffort: "high",
-        },
-      });
-    }).pipe(Effect.provide(makeServerSettingsLayer())),
-  );
-
-  it.effect("drops stale text generation options when resetting model selection", () =>
-    Effect.gen(function* () {
-      const serverSettings = yield* ServerSettingsService;
-
-      yield* serverSettings.updateSettings({
-        textGenerationModelSelection: {
-          provider: "codex",
-          model: DEFAULT_SERVER_SETTINGS.textGenerationModelSelection.model,
-          options: {
-            reasoningEffort: "high",
-            fastMode: true,
-          },
-        },
-      });
-
-      const next = yield* serverSettings.updateSettings({
-        textGenerationModelSelection: {
-          provider: DEFAULT_SERVER_SETTINGS.textGenerationModelSelection.provider,
-          model: DEFAULT_SERVER_SETTINGS.textGenerationModelSelection.model,
-        },
-      });
-
-      assert.deepEqual(next.textGenerationModelSelection, {
-        provider: DEFAULT_SERVER_SETTINGS.textGenerationModelSelection.provider,
-        model: DEFAULT_SERVER_SETTINGS.textGenerationModelSelection.model,
       });
     }).pipe(Effect.provide(makeServerSettingsLayer())),
   );

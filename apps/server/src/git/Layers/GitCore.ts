@@ -1359,7 +1359,6 @@ export const makeGitCore = Effect.fn("makeGitCore")(function* (options?: {
         hasUpstream: details.hasUpstream,
         aheadCount: details.aheadCount,
         behindCount: details.behindCount,
-        pr: null,
       })),
     );
 
