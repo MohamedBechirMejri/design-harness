@@ -23,7 +23,6 @@ const makeProvider = (
   checkedAt: "2026-04-11T00:00:00.000Z",
   models: [],
   slashCommands: [],
-  skills: [],
   ...overrides,
 });
 
@@ -78,14 +77,6 @@ it.layer(NodeServices.layer)("providerStatusCache", (it) => {
         },
       ],
       message: "Cached message",
-      skills: [
-        {
-          name: "github:gh-fix-ci",
-          path: "/tmp/skills/gh-fix-ci/SKILL.md",
-          enabled: true,
-          displayName: "CI Debug",
-        },
-      ],
     });
     const fallbackCodex = makeProvider("codex", {
       models: [
@@ -133,7 +124,6 @@ it.layer(NodeServices.layer)("providerStatusCache", (it) => {
         auth: cachedCodex.auth,
         checkedAt: cachedCodex.checkedAt,
         slashCommands: cachedCodex.slashCommands,
-        skills: cachedCodex.skills,
         message: cachedCodex.message,
       },
     );

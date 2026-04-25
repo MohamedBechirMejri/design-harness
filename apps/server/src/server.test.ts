@@ -346,7 +346,7 @@ const buildAppUnderTest = (options?: {
       otlpMetricsUrl: undefined,
       otlpExportIntervalMs: 10_000,
       otlpServiceName: "t3-server",
-      mode: "desktop",
+      mode: "web",
       port: 0,
       host: "127.0.0.1",
       cwd: process.cwd(),
@@ -1835,7 +1835,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           checkedAt: "2026-04-11T00:00:00.000Z",
           models: [],
           slashCommands: [],
-          skills: [],
         },
       ] as const;
       const changeEvent = {
@@ -1905,7 +1904,6 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           checkedAt: "2026-04-11T00:00:00.000Z",
           models: [],
           slashCommands: [],
-          skills: [],
         },
       ] as const;
 

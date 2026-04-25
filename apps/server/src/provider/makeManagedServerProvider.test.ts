@@ -19,7 +19,6 @@ const initialSnapshot: ServerProvider = {
   message: "Checking provider availability...",
   models: [],
   slashCommands: [],
-  skills: [],
 };
 
 const refreshedSnapshot: ServerProvider = {
@@ -32,7 +31,6 @@ const refreshedSnapshot: ServerProvider = {
   checkedAt: "2026-04-10T00:00:01.000Z",
   models: [],
   slashCommands: [],
-  skills: [],
 };
 
 const enrichedSnapshot: ServerProvider = {

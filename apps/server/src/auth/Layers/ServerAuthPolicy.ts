@@ -10,25 +10,11 @@ export const makeServerAuthPolicy = Effect.gen(function* () {
   const config = yield* ServerConfig;
   const isRemoteReachable = isWildcardHost(config.host) || !isLoopbackHost(config.host);
 
-  const policy =
-    config.mode === "desktop"
-      ? isRemoteReachable
-        ? "remote-reachable"
-        : "desktop-managed-local"
-      : isRemoteReachable
-        ? "remote-reachable"
-        : "loopback-browser";
-
-  const bootstrapMethods: ServerAuthDescriptor["bootstrapMethods"] =
-    policy === "desktop-managed-local"
-      ? ["desktop-bootstrap"]
-      : config.mode === "desktop" && policy === "remote-reachable"
-        ? ["desktop-bootstrap", "one-time-token"]
-        : ["one-time-token"];
+  const policy = isRemoteReachable ? "remote-reachable" : "loopback-browser";
 
   const descriptor: ServerAuthDescriptor = {
     policy,
-    bootstrapMethods,
+    bootstrapMethods: ["one-time-token"],
     sessionMethods: ["browser-session-cookie", "bearer-session-token"],
     sessionCookieName: resolveSessionCookieName({
       mode: config.mode,

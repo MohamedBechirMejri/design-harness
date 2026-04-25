@@ -247,12 +247,7 @@ export const resolveServerConfig = (
       ),
       {
         onSome: (value) => Effect.succeed(value),
-        onNone: () => {
-          if (mode === "desktop") {
-            return Effect.succeed(DEFAULT_PORT);
-          }
-          return findAvailablePort(DEFAULT_PORT);
-        },
+        onNone: () => findAvailablePort(DEFAULT_PORT),
       },
     );
     const devUrl = Option.getOrElse(
@@ -291,7 +286,7 @@ export const resolveServerConfig = (
         Option.fromUndefinedOr(env.noBrowser),
         Option.fromUndefinedOr(bootstrap?.noBrowser),
       ),
-      () => mode === "desktop",
+      () => false,
     );
     const desktopBootstrapToken = bootstrap?.desktopBootstrapToken;
     const autoBootstrapProjectFromCwd = Option.getOrElse(
@@ -302,7 +297,7 @@ export const resolveServerConfig = (
         Option.fromUndefinedOr(env.autoBootstrapProjectFromCwd),
         Option.fromUndefinedOr(bootstrap?.autoBootstrapProjectFromCwd),
       ),
-      () => mode === "web",
+      () => true,
     );
     const logWebSocketEvents = Option.getOrElse(
       resolveOptionPrecedence(
@@ -319,7 +314,7 @@ export const resolveServerConfig = (
         Option.fromUndefinedOr(env.host),
         Option.fromUndefinedOr(bootstrap?.host),
       ),
-      () => (mode === "desktop" ? "127.0.0.1" : undefined),
+      () => undefined,
     );
     const logLevel = Option.getOrElse(cliLogLevel, () => env.logLevel);
 

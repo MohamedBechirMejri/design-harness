@@ -79,18 +79,6 @@ describe("detectComposerTrigger", () => {
     });
   });
 
-  it("detects $skill trigger at cursor", () => {
-    const text = "Use $gh-fi";
-    const trigger = detectComposerTrigger(text, text.length);
-
-    expect(trigger).toEqual({
-      kind: "skill",
-      query: "gh-fi",
-      rangeStart: "Use ".length,
-      rangeEnd: text.length,
-    });
-  });
-
   it("detects @path trigger in the middle of existing text", () => {
     // User typed @ between "inspect " and "in this sentence"
     const text = "Please inspect @in this sentence";
@@ -164,16 +152,6 @@ describe("expandCollapsedComposerCursor", () => {
 
     expect(detectComposerTrigger(text, expandedCursor)).toBeNull();
   });
-
-  it("maps collapsed skill cursor to expanded text cursor", () => {
-    const text = "run $review-follow-up then";
-    const collapsedCursorAfterSkill = "run ".length + 2;
-    const expandedCursorAfterSkill = "run $review-follow-up ".length;
-
-    expect(expandCollapsedComposerCursor(text, collapsedCursorAfterSkill)).toBe(
-      expandedCursorAfterSkill,
-    );
-  });
 });
 
 describe("collapseExpandedComposerCursor", () => {
@@ -198,16 +176,6 @@ describe("collapseExpandedComposerCursor", () => {
 
     expect(collapsedCursor).toBe("open ".length + 1 + " then ".length + 2);
     expect(expandCollapsedComposerCursor(text, collapsedCursor)).toBe(expandedCursor);
-  });
-
-  it("maps expanded skill cursor back to collapsed cursor", () => {
-    const text = "run $review-follow-up then";
-    const collapsedCursorAfterSkill = "run ".length + 2;
-    const expandedCursorAfterSkill = "run $review-follow-up ".length;
-
-    expect(collapseExpandedComposerCursor(text, expandedCursorAfterSkill)).toBe(
-      collapsedCursorAfterSkill,
-    );
   });
 });
 
@@ -279,15 +247,6 @@ describe("isCollapsedCursorAdjacentToInlineToken", () => {
   it("treats terminal pills as inline tokens for adjacency checks", () => {
     const text = `open ${INLINE_TERMINAL_CONTEXT_PLACEHOLDER} next`;
     const tokenStart = "open ".length;
-    const tokenEnd = tokenStart + 1;
-
-    expect(isCollapsedCursorAdjacentToInlineToken(text, tokenEnd, "left")).toBe(true);
-    expect(isCollapsedCursorAdjacentToInlineToken(text, tokenStart, "right")).toBe(true);
-  });
-
-  it("treats skill pills as inline tokens for adjacency checks", () => {
-    const text = "run $review-follow-up next";
-    const tokenStart = "run ".length;
     const tokenEnd = tokenStart + 1;
 
     expect(isCollapsedCursorAdjacentToInlineToken(text, tokenEnd, "left")).toBe(true);

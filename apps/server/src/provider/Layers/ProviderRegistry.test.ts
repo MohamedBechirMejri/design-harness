@@ -120,7 +120,6 @@ function makeCodexProbeSnapshot(
         capabilities: codexModelCapabilities,
       },
     ],
-    skills: [],
     ...input,
   };
 }
@@ -158,19 +157,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest()))(
       it.effect("uses the app-server account and model list for provider status", () =>
         Effect.gen(function* () {
           const status = yield* checkCodexProviderStatus(() =>
-            Effect.succeed(
-              makeCodexProbeSnapshot({
-                skills: [
-                  {
-                    name: "github:gh-fix-ci",
-                    path: "/Users/test/.codex/skills/gh-fix-ci/SKILL.md",
-                    enabled: true,
-                    displayName: "CI Debug",
-                    shortDescription: "Debug failing GitHub Actions checks",
-                  },
-                ],
-              }),
-            ),
+            Effect.succeed(makeCodexProbeSnapshot()),
           );
 
           assert.strictEqual(status.provider, "codex");
@@ -186,15 +173,6 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest()))(
               name: "GPT Live Codex",
               isCustom: false,
               capabilities: codexModelCapabilities,
-            },
-          ]);
-          assert.deepStrictEqual(status.skills, [
-            {
-              name: "github:gh-fix-ci",
-              path: "/Users/test/.codex/skills/gh-fix-ci/SKILL.md",
-              enabled: true,
-              displayName: "CI Debug",
-              shortDescription: "Debug failing GitHub Actions checks",
             },
           ]);
         }),
@@ -297,7 +275,6 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest()))(
             version: "1.0.0",
             models: [],
             slashCommands: [],
-            skills: [],
           },
           {
             provider: "claudeAgent",
@@ -309,7 +286,6 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest()))(
             version: "1.0.0",
             models: [],
             slashCommands: [],
-            skills: [],
           },
         ] as const satisfies ReadonlyArray<ServerProvider>;
 
@@ -340,7 +316,6 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest()))(
             },
           ],
           slashCommands: [],
-          skills: [],
         } as const satisfies ServerProvider;
         const refreshedProvider = {
           ...previousProvider,
@@ -377,7 +352,6 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest()))(
             },
           ],
           slashCommands: [],
-          skills: [],
         } as const satisfies ServerProvider;
         const refreshedProvider = {
           ...previousProvider,

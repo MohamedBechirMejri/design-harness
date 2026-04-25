@@ -10,7 +10,7 @@ import { Effect, FileSystem, Layer, LogLevel, Path, Schema, Context } from "effe
 
 export const DEFAULT_PORT = 3773;
 
-export const RuntimeMode = Schema.Literals(["web", "desktop"]);
+export const RuntimeMode = Schema.Literals(["web"]);
 export type RuntimeMode = typeof RuntimeMode.Type;
 
 export const StartupPresentation = Schema.Literals(["browser", "headless"]);

@@ -84,7 +84,6 @@ const TEST_PROVIDERS: ReadonlyArray<ServerProvider> = [
     auth: { status: "authenticated" },
     checkedAt: new Date().toISOString(),
     slashCommands: [],
-    skills: [],
     models: [
       {
         slug: "gpt-5-codex",
@@ -121,7 +120,6 @@ const TEST_PROVIDERS: ReadonlyArray<ServerProvider> = [
     auth: { status: "authenticated" },
     checkedAt: new Date().toISOString(),
     slashCommands: [],
-    skills: [],
     models: [
       {
         slug: "claude-opus-4-6",
@@ -184,7 +182,6 @@ function buildCodexProvider(models: ServerProvider["models"]): ServerProvider {
     checkedAt: new Date().toISOString(),
     models,
     slashCommands: [],
-    skills: [],
   };
 }
 

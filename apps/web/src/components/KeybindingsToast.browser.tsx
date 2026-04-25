@@ -81,7 +81,6 @@ function createBaseServerConfig(): ServerConfig {
         checkedAt: NOW_ISO,
         models: [],
         slashCommands: [],
-        skills: [],
       },
     ],
     availableEditors: [],

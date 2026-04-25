@@ -295,7 +295,7 @@ it.layer(NodeServices.layer)("cli config resolution", (it) => {
 
       const resolved = yield* resolveServerConfig(
         {
-          mode: Option.some("desktop"),
+          mode: Option.some("web"),
           port: Option.some(4888),
           host: Option.none(),
           baseDir: Option.some(baseDir),
@@ -421,7 +421,7 @@ it.layer(NodeServices.layer)("cli config resolution", (it) => {
 
       const resolved = yield* resolveServerConfig(
         {
-          mode: Option.some("desktop"),
+          mode: Option.some("web"),
           port: Option.some(4888),
           host: Option.none(),
           baseDir: Option.some(baseDir),

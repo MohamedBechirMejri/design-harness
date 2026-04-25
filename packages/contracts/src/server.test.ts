@@ -21,6 +21,5 @@ describe("ServerProvider", () => {
     });
 
     expect(parsed.slashCommands).toEqual([]);
-    expect(parsed.skills).toEqual([]);
   });
 });
