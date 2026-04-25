@@ -18,6 +18,7 @@ interface ComposerPrimaryActionsProps {
   isSendBusy: boolean;
   isConnecting: boolean;
   isPreparingWorktree: boolean;
+  isInterrupting: boolean;
   hasSendableContent: boolean;
   onPreviousPendingQuestion: () => void;
   onInterrupt: () => void;
@@ -48,6 +49,7 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
   isSendBusy,
   isConnecting,
   isPreparingWorktree,
+  isInterrupting,
   hasSendableContent,
   onPreviousPendingQuestion,
   onInterrupt,
@@ -103,9 +105,15 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
     return (
       <button
         type="button"
-        className="flex size-9 cursor-pointer items-center justify-center rounded-full bg-destructive text-destructive-foreground shadow-soft transition-[background-color,box-shadow] duration-150 hover:shadow-lifted sm:size-8"
+        className={cn(
+          "flex size-9 cursor-pointer items-center justify-center rounded-full bg-destructive text-destructive-foreground shadow-soft transition-[background-color,box-shadow] duration-150 hover:shadow-lifted sm:size-8",
+          isInterrupting && "animate-pulse",
+        )}
         onClick={onInterrupt}
-        aria-label="Stop generation"
+        aria-label={isInterrupting ? "Force stop session" : "Stop generation"}
+        title={
+          isInterrupting ? "Stopping… click again to force-kill the session" : "Stop generation"
+        }
       >
         <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true">
           <rect x="2" y="2" width="8" height="8" rx="1.5" />

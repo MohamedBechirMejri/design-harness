@@ -1315,13 +1315,33 @@ export default function ChatView(props: ChatViewProps) {
     }
   };
 
+  const interruptAttemptRef = useRef<{ threadId: string; firstAt: number } | null>(null);
   const onInterrupt = async () => {
     const api = readEnvironmentApi(environmentId);
     if (!api || !activeThread) return;
+    const threadId = activeThread.id;
+    const previous = interruptAttemptRef.current;
+    const now = Date.now();
+    // Second click within ~10s on the same thread → escalate from a
+    // graceful turn.interrupt to a hard session.stop so the underlying
+    // provider process is killed if the model isn't honoring the
+    // interrupt mid-tool-call.
+    const shouldEscalate = previous?.threadId === threadId && now - previous.firstAt <= 10_000;
+    if (shouldEscalate) {
+      interruptAttemptRef.current = null;
+      await api.orchestration.dispatchCommand({
+        type: "thread.session.stop",
+        commandId: newCommandId(),
+        threadId,
+        createdAt: new Date().toISOString(),
+      });
+      return;
+    }
+    interruptAttemptRef.current = { threadId, firstAt: now };
     await api.orchestration.dispatchCommand({
       type: "thread.turn.interrupt",
       commandId: newCommandId(),
-      threadId: activeThread.id,
+      threadId,
       createdAt: new Date().toISOString(),
     });
   };

@@ -136,6 +136,7 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
   isRunning: boolean;
   isSendBusy: boolean;
   isConnecting: boolean;
+  isInterrupting: boolean;
   hasSendableContent: boolean;
   onPreviousPendingQuestion: () => void;
   onInterrupt: () => void;
@@ -145,6 +146,8 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
       {props.activeContextWindow ? <ContextWindowMeter usage={props.activeContextWindow} /> : null}
       {props.isPreparingWorktree ? (
         <span className="text-muted-foreground/70 text-xs">Preparing worktree...</span>
+      ) : props.isInterrupting ? (
+        <span className="text-muted-foreground/70 text-xs">Stopping…</span>
       ) : null}
       <ComposerPrimaryActions
         compact={props.compact}
@@ -153,6 +156,7 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
         isSendBusy={props.isSendBusy}
         isConnecting={props.isConnecting}
         isPreparingWorktree={props.isPreparingWorktree}
+        isInterrupting={props.isInterrupting}
         hasSendableContent={props.hasSendableContent}
         onPreviousPendingQuestion={props.onPreviousPendingQuestion}
         onInterrupt={props.onInterrupt}
@@ -1323,7 +1327,21 @@ export const ChatComposer = memo(
       addComposerImages(files);
       focusComposer();
     };
+    const [isInterrupting, setIsInterrupting] = useState(false);
+    // Auto-clear the "stopping…" state when the turn actually ends, or
+    // after a short ceiling so the UI never gets stuck.
+    useEffect(() => {
+      if (phase !== "running" && isInterrupting) {
+        setIsInterrupting(false);
+      }
+    }, [phase, isInterrupting]);
+    useEffect(() => {
+      if (!isInterrupting) return;
+      const timer = window.setTimeout(() => setIsInterrupting(false), 8_000);
+      return () => window.clearTimeout(timer);
+    }, [isInterrupting]);
     const handleInterruptPrimaryAction = useCallback(() => {
+      setIsInterrupting(true);
       void onInterrupt();
     }, [onInterrupt]);
     // ------------------------------------------------------------------
@@ -1670,6 +1688,7 @@ export const ChatComposer = memo(
                     isSendBusy={isSendBusy}
                     isConnecting={isConnecting}
                     isPreparingWorktree={isPreparingWorktree}
+                    isInterrupting={isInterrupting}
                     hasSendableContent={composerSendState.hasSendableContent}
                     onPreviousPendingQuestion={onPreviousActivePendingUserInputQuestion}
                     onInterrupt={handleInterruptPrimaryAction}
