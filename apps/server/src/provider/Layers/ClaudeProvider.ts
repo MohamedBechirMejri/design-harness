@@ -152,6 +152,106 @@ function getBuiltInClaudeModelsForVersion(
   return BUILT_IN_MODELS.filter((model) => model.slug !== "claude-opus-4-7");
 }
 
+/**
+ * Derive plausible capabilities for an unrecognized Claude model id by
+ * matching its family prefix. Newer Anthropic releases (e.g. claude-sonnet-5-0)
+ * inherit the same shape as the closest known sibling so they slot into the
+ * picker with sensible defaults.
+ */
+function deriveClaudeCapabilitiesFromSlug(slug: string): ModelCapabilities {
+  const lower = slug.toLowerCase();
+  const family = lower.includes("opus")
+    ? "opus"
+    : lower.includes("sonnet")
+      ? "sonnet"
+      : lower.includes("haiku")
+        ? "haiku"
+        : null;
+  if (family === null) return DEFAULT_CLAUDE_MODEL_CAPABILITIES;
+  // Use the most permissive built-in we have for that family as the template.
+  const template = BUILT_IN_MODELS.find((entry) => entry.slug.toLowerCase().includes(family));
+  return template?.capabilities ?? DEFAULT_CLAUDE_MODEL_CAPABILITIES;
+}
+
+interface AnthropicModelsApiResponse {
+  readonly data?: ReadonlyArray<{
+    readonly id?: unknown;
+    readonly display_name?: unknown;
+  }>;
+}
+
+const ANTHROPIC_MODELS_API_URL = "https://api.anthropic.com/v1/models";
+const ANTHROPIC_MODELS_API_TIMEOUT_MS = 4_000;
+
+/**
+ * Try to query Anthropic's published `/v1/models` endpoint so we pick up
+ * new releases automatically. Requires `ANTHROPIC_API_KEY` to be set in
+ * the server environment; without it we silently fall back to BUILT_IN_MODELS.
+ */
+async function fetchAnthropicCatalogModels(): Promise<ReadonlyArray<ServerProviderModel> | null> {
+  const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
+  if (!apiKey) return null;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ANTHROPIC_MODELS_API_TIMEOUT_MS);
+  try {
+    const response = await fetch(ANTHROPIC_MODELS_API_URL, {
+      headers: {
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      signal: controller.signal,
+    });
+    if (!response.ok) return null;
+    const json = (await response.json()) as AnthropicModelsApiResponse;
+    const entries = Array.isArray(json.data) ? json.data : [];
+    const models: ServerProviderModel[] = [];
+    for (const entry of entries) {
+      const slug = typeof entry?.id === "string" ? entry.id.trim() : "";
+      if (!slug) continue;
+      // Only surface CLI-compatible Claude model slugs (skip preview-only,
+      // batch-only, or differently-namespaced ids that won't run in claude-code).
+      if (!slug.startsWith("claude-")) continue;
+      const knownCapabilities = BUILT_IN_MODELS.find((entry) => entry.slug === slug)?.capabilities;
+      const displayName =
+        typeof entry?.display_name === "string" && entry.display_name.trim().length > 0
+          ? entry.display_name.trim()
+          : slug;
+      models.push({
+        slug,
+        name: displayName,
+        isCustom: false,
+        capabilities: knownCapabilities ?? deriveClaudeCapabilitiesFromSlug(slug),
+      });
+    }
+    return models.length > 0 ? models : null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function mergeClaudeModels(
+  curated: ReadonlyArray<ServerProviderModel>,
+  discovered: ReadonlyArray<ServerProviderModel> | null,
+): ReadonlyArray<ServerProviderModel> {
+  if (!discovered || discovered.length === 0) return curated;
+  const seen = new Set<string>();
+  const merged: ServerProviderModel[] = [];
+  // Curated entries first so their ordering and rich capability data win.
+  for (const entry of curated) {
+    if (seen.has(entry.slug)) continue;
+    seen.add(entry.slug);
+    merged.push(entry);
+  }
+  for (const entry of discovered) {
+    if (seen.has(entry.slug)) continue;
+    seen.add(entry.slug);
+    merged.push(entry);
+  }
+  return merged;
+}
+
 function formatClaudeOpus47UpgradeMessage(version: string | null): string {
   const versionLabel = version ? `v${version}` : "the installed version";
   return `Claude Code ${versionLabel} is too old for Claude Opus 4.7. Upgrade to v${MINIMUM_CLAUDE_OPUS_4_7_VERSION} or newer to access it.`;
@@ -653,8 +753,13 @@ export const checkClaudeProviderStatus = Effect.fn("checkClaudeProviderStatus")(
     });
   }
 
-  const models = providerModelsFromSettings(
+  const discoveredModels = yield* Effect.promise(() => fetchAnthropicCatalogModels());
+  const baseModels = mergeClaudeModels(
     getBuiltInClaudeModelsForVersion(parsedVersion),
+    discoveredModels,
+  );
+  const models = providerModelsFromSettings(
+    baseModels,
     PROVIDER,
     claudeSettings.customModels,
     DEFAULT_CLAUDE_MODEL_CAPABILITIES,
