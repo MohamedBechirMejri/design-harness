@@ -1723,6 +1723,10 @@ export default function ChatView(props: ChatViewProps) {
               workspaceRoot={activeWorkspaceRoot}
               onIsAtEndChange={onIsAtEndChange}
               onSubmitDesignAnswers={onSubmitDesignAnswers}
+              onPickStarter={(prompt) => {
+                setComposerDraftPrompt(composerDraftTarget, prompt);
+                scheduleComposerFocus();
+              }}
             />
 
             {/* scroll to bottom pill — shown when user has scrolled away from the bottom */}
