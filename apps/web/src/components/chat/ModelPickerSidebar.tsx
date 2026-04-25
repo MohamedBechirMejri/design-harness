@@ -1,7 +1,6 @@
 import { type ProviderKind, type ServerProvider } from "@dh/contracts";
 import { memo } from "react";
-import { Clock3Icon, SparklesIcon, StarIcon } from "lucide-react";
-import { Gemini, GithubCopilotIcon } from "../Icons";
+import { SparklesIcon, StarIcon } from "lucide-react";
 import { AVAILABLE_PROVIDER_OPTIONS, PROVIDER_ICON_BY_PROVIDER } from "./providerIconUtils";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { cn } from "~/lib/utils";
@@ -32,7 +31,6 @@ const SELECTED_INDICATOR_CLASS =
 const BADGE_BASE_CLASS =
   "pointer-events-none absolute -right-0.5 top-0.5 z-10 flex size-3.5 items-center justify-center rounded-full bg-transparent shadow-sm ";
 const NEW_BADGE_CLASS = `${BADGE_BASE_CLASS} text-amber-600  dark:text-amber-300 `;
-const SOON_BADGE_CLASS = `${BADGE_BASE_CLASS} text-muted-foreground `;
 
 /** Opens toward the rail so the list stays readable (not over the model names). */
 const PICKER_TOOLTIP_SIDE = "left" as const;
@@ -122,10 +120,6 @@ export const ModelPickerSidebar = memo(function ModelPickerSidebar(props: {
               <span className={NEW_BADGE_CLASS} aria-hidden>
                 <SparklesIcon className="size-2" />
               </span>
-            ) : badge === "soon" ? (
-              <span className={SOON_BADGE_CLASS} aria-hidden>
-                <Clock3Icon className="size-2" />
-              </span>
             ) : null}
           </button>
         );
@@ -152,59 +146,6 @@ export const ModelPickerSidebar = memo(function ModelPickerSidebar(props: {
           </div>
         );
       })}
-
-      {/* Gemini button (coming soon) */}
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <span className="relative block w-full">
-              <button
-                className={cn(
-                  "relative isolate flex w-full aspect-square items-center justify-center rounded opacity-50 cursor-not-allowed transition-colors hover:bg-transparent",
-                )}
-                disabled
-                type="button"
-                data-model-picker-provider="gemini-coming-soon"
-                aria-label="Gemini — coming soon"
-              >
-                <Gemini className="size-5 text-muted-foreground/85" aria-hidden />
-                <span className={SOON_BADGE_CLASS} aria-hidden>
-                  <Clock3Icon className="size-2" />
-                </span>
-              </button>
-            </span>
-          }
-        />
-        <TooltipPopup side={PICKER_TOOLTIP_SIDE} align="center" className={PICKER_TOOLTIP_CLASS}>
-          Gemini — Coming soon
-        </TooltipPopup>
-      </Tooltip>
-      {/* Github Copilot button (coming soon) */}
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <span className="relative block w-full">
-              <button
-                className={cn(
-                  "relative isolate flex w-full aspect-square items-center justify-center rounded opacity-50 cursor-not-allowed transition-colors hover:bg-transparent",
-                )}
-                disabled
-                type="button"
-                data-model-picker-provider="github-copilot-coming-soon"
-                aria-label="Github Copilot — coming soon"
-              >
-                <GithubCopilotIcon className="size-5 text-muted-foreground/85" aria-hidden />
-                <span className={SOON_BADGE_CLASS} aria-hidden>
-                  <Clock3Icon className="size-2" />
-                </span>
-              </button>
-            </span>
-          }
-        />
-        <TooltipPopup side={PICKER_TOOLTIP_SIDE} align="center" className={PICKER_TOOLTIP_CLASS}>
-          Github Copilot — Coming soon
-        </TooltipPopup>
-      </Tooltip>
     </div>
   );
 });

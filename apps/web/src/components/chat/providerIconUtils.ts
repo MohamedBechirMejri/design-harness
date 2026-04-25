@@ -11,7 +11,7 @@ function isAvailableProviderOption(option: (typeof PROVIDER_OPTIONS)[number]): o
   value: ProviderKind;
   label: string;
   available: true;
-  pickerSidebarBadge?: "new" | "soon";
+  pickerSidebarBadge?: "new";
 } {
   return option.available;
 }
