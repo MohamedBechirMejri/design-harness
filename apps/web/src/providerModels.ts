@@ -43,7 +43,9 @@ export function resolveSelectableProvider(
   providers: ReadonlyArray<ServerProvider>,
   provider: ProviderKind | null | undefined,
 ): ProviderKind {
-  const requested = provider ?? "codex";
+  // Design Harness defaults to claudeAgent when no preference is set —
+  // Claude Sonnet produces noticeably better HTML/CSS for design output.
+  const requested = provider ?? "claudeAgent";
   if (isProviderEnabled(providers, requested)) {
     return requested;
   }

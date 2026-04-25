@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   ArrowUpRightIcon,
@@ -176,6 +176,54 @@ const DesignPreviewSidebar = memo(function DesignPreviewSidebar({
   const viewportWidth = viewport === "auto" ? null : VIEWPORT_WIDTHS[viewport];
   const canCopySource = Boolean(contents) && hasEntries && selectedPath !== null;
   const [justCopied, setJustCopied] = useState(false);
+
+  // Measure the canvas frame so we can scale a fixed-viewport iframe down
+  // to fit when the pane is narrower than the target width.
+  const frameRef = useRef<HTMLDivElement | null>(null);
+  const [frameWidth, setFrameWidth] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    if (typeof window === "undefined") return;
+    const node = frameRef.current;
+    if (!node) return;
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) return;
+      setFrameWidth(entry.contentRect.width);
+    });
+    observer.observe(node);
+    setFrameWidth(node.getBoundingClientRect().width);
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
+
+  const scaleFactor = useMemo(() => {
+    if (viewportWidth === null || frameWidth === null) return 1;
+    // Subtract horizontal padding (32px) of the centering wrapper so the
+    // scaled iframe doesn't push against the edges.
+    const usable = Math.max(0, frameWidth - 32);
+    if (usable <= 0) return 1;
+    return Math.min(1, usable / viewportWidth);
+  }, [viewportWidth, frameWidth]);
+
+  // Brief "just updated" highlight whenever the iframe content reloads.
+  const lastModifiedAtMs = selectedEntry?.modifiedAtMs ?? 0;
+  const [flashKey, setFlashKey] = useState(0);
+  const previousModifiedRef = useRef<number>(0);
+  useEffect(() => {
+    if (lastModifiedAtMs === 0) {
+      previousModifiedRef.current = 0;
+      return;
+    }
+    if (previousModifiedRef.current === 0) {
+      previousModifiedRef.current = lastModifiedAtMs;
+      return;
+    }
+    if (previousModifiedRef.current !== lastModifiedAtMs) {
+      previousModifiedRef.current = lastModifiedAtMs;
+      setFlashKey((k) => k + 1);
+    }
+  }, [lastModifiedAtMs]);
   const copySource = useCallback(() => {
     if (!contents) return;
     void navigator.clipboard
@@ -307,8 +355,9 @@ const DesignPreviewSidebar = memo(function DesignPreviewSidebar({
           </div>
         ) : selectedIsHtml && view === "preview" ? (
           <div
+            ref={frameRef}
             className={cn(
-              "flex min-h-0 flex-1 overflow-auto rounded-2xl",
+              "relative flex min-h-0 flex-1 overflow-auto rounded-2xl",
               viewportWidth === null
                 ? "border border-border-strong/60 bg-white shadow-soft"
                 : "items-start justify-center bg-surface/40 p-4",
@@ -325,28 +374,37 @@ const DesignPreviewSidebar = memo(function DesignPreviewSidebar({
                 viewportWidth === null
                   ? undefined
                   : {
-                      width: `${viewportWidth}px`,
-                      maxWidth: "100%",
+                      width: `${viewportWidth * scaleFactor}px`,
+                      height: `${(frameWidth ? frameWidth - 32 : viewportWidth) > 0 ? "100%" : "auto"}`,
                       minHeight: "100%",
                     }
               }
             >
               <iframe
-                key={`${selectedPath}:${selectedEntry?.modifiedAtMs ?? 0}`}
+                key={`${selectedPath}:${lastModifiedAtMs}`}
                 title={`Preview of ${selectedPath}`}
                 sandbox="allow-scripts allow-forms allow-popups"
                 srcDoc={contents}
-                className="h-full w-full border-0 bg-white"
+                className="border-0 bg-white"
                 style={
                   viewportWidth === null
-                    ? undefined
+                    ? { height: "100%", width: "100%" }
                     : {
                         width: `${viewportWidth}px`,
-                        minHeight: "100%",
+                        height: `${100 / scaleFactor}%`,
+                        minHeight: `${100 / scaleFactor}%`,
+                        transform: `scale(${scaleFactor})`,
+                        transformOrigin: "top left",
                       }
                 }
               />
             </div>
+            {viewportWidth !== null && scaleFactor < 0.999 ? (
+              <div className="pointer-events-none absolute right-3 top-3 rounded-md bg-foreground/80 px-2 py-0.5 font-mono text-[10px] font-medium text-background shadow-soft">
+                {Math.round(scaleFactor * 100)}%
+              </div>
+            ) : null}
+            <CanvasUpdateFlash flashKey={flashKey} />
           </div>
         ) : (
           <ScrollArea className="h-full rounded-2xl border border-border bg-surface">
@@ -456,6 +514,26 @@ function ViewToggle({ view, onChange }: ViewToggleProps) {
         <CodeIcon className="size-3.5" aria-hidden />
       </button>
     </div>
+  );
+}
+
+function CanvasUpdateFlash({ flashKey }: { flashKey: number }) {
+  const [active, setActive] = useState(false);
+  useEffect(() => {
+    if (flashKey === 0) return;
+    setActive(true);
+    const timer = window.setTimeout(() => setActive(false), 600);
+    return () => window.clearTimeout(timer);
+  }, [flashKey]);
+
+  return (
+    <div
+      aria-hidden
+      className={cn(
+        "pointer-events-none absolute inset-0 rounded-2xl ring-1 transition-opacity duration-500",
+        active ? "opacity-100 ring-brand/60" : "opacity-0 ring-transparent",
+      )}
+    />
   );
 }
 
