@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 
 import ThreadSidebar from "./Sidebar";
 import { Sidebar, SidebarProvider, SidebarRail } from "./ui/sidebar";
@@ -31,6 +31,12 @@ function persistSidebarOpen(open: boolean): void {
 }
 
 export function AppSidebarLayout({ children }: { children: ReactNode }) {
+  const [sidebarOpen, setSidebarOpen] = useState(readPersistedSidebarOpen);
+  const handleSidebarOpenChange = useCallback((open: boolean) => {
+    setSidebarOpen(open);
+    persistSidebarOpen(open);
+  }, []);
+
   useEffect(() => {
     const onWindowKeyDown = (event: KeyboardEvent) => {
       syncShortcutModifierStateFromKeyboardEvent(event);
@@ -54,7 +60,7 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <SidebarProvider defaultOpen={readPersistedSidebarOpen()} onOpenChange={persistSidebarOpen}>
+    <SidebarProvider open={sidebarOpen} onOpenChange={handleSidebarOpenChange}>
       <Sidebar
         side="left"
         collapsible="offcanvas"
