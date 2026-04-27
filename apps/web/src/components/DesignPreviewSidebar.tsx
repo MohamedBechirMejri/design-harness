@@ -21,7 +21,13 @@ const POLL_INTERVAL_MS = 2000;
 const EMPTY_ENTRIES: ReadonlyArray<DesignPreviewEntry> = [];
 const EMPTY_ASSET_MAP: ReadonlyMap<string, string> = new Map();
 
-const INLINABLE_ASSET_RE = /\.(css|js|mjs|cjs)$/i;
+// CSS/JS need inlining because the iframe renders via `srcDoc` at
+// `about:srcdoc`, which has no usable base URL for sibling fetches.
+// JSX/TSX are added so React-mode designs (Babel Standalone + CDN React)
+// can split components across files and still render in the iframe — we
+// rewrite their `<script type="text/babel" src="components/Foo.jsx">` tags
+// to inline scripts, preserving `type` and `data-presets` attributes.
+const INLINABLE_ASSET_RE = /\.(css|jsx|tsx|js|mjs|cjs)$/i;
 
 function isInlinableAssetPath(path: string): boolean {
   return INLINABLE_ASSET_RE.test(path);
@@ -745,7 +751,7 @@ function CanvasEmptyState({ isError, isPending, error, absolutePath }: CanvasEmp
           Your design will appear here.
         </div>
         <div className="text-[14px] leading-relaxed text-muted-foreground">
-          Describe what you want in the chat. The canvas refreshes as the model writes HTML.
+          Describe what you want in the chat. The canvas refreshes as the model writes the design.
         </div>
       </div>
       {absolutePath ? (
