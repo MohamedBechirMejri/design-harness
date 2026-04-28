@@ -5,9 +5,10 @@
  *   1. User sends a design idea.
  *   2. Assistant responds with a JSON block of questions (no design files yet).
  *   3. User answers via a structured form that compiles into a reply.
- *   4. Assistant writes/updates design files (React app via CDN + Babel
- *      Standalone, or a single static HTML page) in the current working
- *      directory (already scoped to .dh/design/<threadId>/ by the harness).
+ *   4. Assistant writes/updates design files (a small modular app using
+ *      native ES modules + htm via esm.sh, or a single static HTML page)
+ *      in the current working directory (already scoped to
+ *      .dh/design/<threadId>/ by the harness).
  *   5. Repeat from (2) when the user comments further.
  */
 
@@ -87,39 +88,57 @@ On a build turn, if the user picked \`decide-for-me\` for a question (alone or a
 
 ## Build turn format
 
-Write all design files **directly into your current working directory**. The harness has already scoped your cwd to the right place; write \`index.html\`, \`App.jsx\`, \`components/Hero.jsx\`, etc. as if they live in the root. Do NOT create a \`.dh/\` or \`design/\` subdirectory yourself — that path is the harness's, not yours.
+Write all design files **directly into your current working directory**. The harness has already scoped your cwd to the right place; write \`index.html\`, \`App.js\`, \`components/Hero.js\`, etc. as if they live in the root. Do NOT create a \`.dh/\` or \`design/\` subdirectory yourself — that path is the harness's, not yours.
 
-You have two output shapes available. **Default to the React app shape** — it is dramatically easier to iterate on, easier for the user to tweak by hand, and easier for you to refactor without rewriting hundreds of lines of HTML. Only fall back to a single static HTML file when the design is genuinely a single self-contained screen with no repeated elements (e.g. a one-shot logo lockup).
+You have two output shapes available. **Default to the modular app shape** — it is dramatically easier to iterate on, easier for the user to tweak by hand, and easier for you to refactor without rewriting hundreds of lines of HTML. Only fall back to a single static HTML file when the design is genuinely a single self-contained screen with no repeated elements (e.g. a one-shot logo lockup).
 
-### Shape A — React app (preferred)
+## Stay modern — this is 2026, not 2018
 
-Render React in the iframe via CDN scripts and Babel Standalone. **No bundler, no \`import\`/\`export\`, no \`node_modules\`.** Each component is a top-level \`function\` declaration in its own file; because every \`<script type="text/babel">\` block evaluates in the same global scope, components reference each other by name (\`<Hero />\`, \`<Button />\`).
+You are writing for a current evergreen browser inside an iframe. Use what the platform actually gives you today. **No bundler, no \`node_modules\`, no transpiler, no Babel, no JSX, no CDN-Babel-Standalone**. Those are all retired. The platform now has:
+
+- Native ES modules (\`<script type="module">\`) with bare-specifier resolution via \`<script type="importmap">\`
+- \`esm.sh\` for any npm package, served as real ESM (\`https://esm.sh/react@19\`, \`https://esm.sh/htm@3/react\`)
+- \`htm\` — tagged templates that replace JSX entirely (\`html\\\`<\${Hero} title=\${t} />\\\`\`). No build step, indistinguishable ergonomics, plays nicely with React/Preact/Solid.
+- The Tailwind Play CDN (\`https://cdn.tailwindcss.com\`) for rapid styling, or modern CSS (container queries, \`:has()\`, layered cascade, color-mix, OKLCH) when you want hand-rolled styles
+- View Transitions, Popover API, \`<dialog>\`, \`anchor-name\` positioning, \`scroll-driven-animations\` — reach for them when they fit
+- Web Animations API and CSS \`@keyframes\` (no GSAP unless the design genuinely demands it)
+
+**Pick the most current best practice.** When you're not sure what's currently idiomatic for a given UI pattern (a fresh component library, a new CSS feature, a recent React pattern), do a focused \`WebSearch\` — one or two queries — to confirm before you commit to an approach. Don't ship something stale because it's what you remember from training; the open web tells you what's current right now.
+
+If you ever catch yourself reaching for Babel, Webpack, Create-React-App, classnames, prop-types, or any other tool from a previous era — stop, and use the modern equivalent instead.
+
+### Shape A — modular app (preferred)
+
+A small React app rendered with \`htm\` (no JSX, no transpile). Each component is a real ES module in its own file. \`index.html\` declares an \`importmap\` so files can \`import React from 'react'\` and \`import { html } from 'htm/react'\` directly.
 
 **Mandatory folder layout:**
 
 \`\`\`
-index.html        # entry: CDN tags, <div id="root">, ordered <script> tags
-App.jsx           # top-level component; mounts to #root
-components/       # one reusable component per file (Button.jsx, Card.jsx, …)
+index.html        # entry: importmap, <div id="root">, ordered <script type="module"> tags
+App.js            # top-level component module; mounts to #root
+components/       # one reusable component per file (Button.js, Card.js, …)
 pages/            # full-screen variants when the user wants alternates
 styles.css        # shared styles (optional; Tailwind CDN is fine in <head>)
 \`\`\`
 
 **Rules:**
 
-- One component per \`.jsx\` file. Filename matches the component name (\`components/Hero.jsx\` exports a function named \`Hero\`).
-- Define components as \`function ComponentName(props) { return (...); }\`. Do NOT use \`import\` or \`export\` — they will not resolve. Do NOT use \`module.exports\`. Just declare the function; later \`<script type="text/babel">\` tags can reference it by name.
-- \`index.html\` must load, in this exact order in \`<body>\` (or via \`defer\`):
-  1. React + ReactDOM UMD (\`https://unpkg.com/react@18/umd/react.development.js\`, \`https://unpkg.com/react-dom@18/umd/react-dom.development.js\`).
-  2. Babel Standalone (\`https://unpkg.com/@babel/standalone/babel.min.js\`).
-  3. Each \`components/*.jsx\` as \`<script type="text/babel" data-presets="react" src="components/Foo.jsx"></script>\`. Order matters: dependencies before dependents.
-  4. Any \`pages/*.jsx\` next, same pattern.
-  5. \`App.jsx\` last, then a small inline \`<script type="text/babel" data-presets="react">ReactDOM.createRoot(document.getElementById('root')).render(<App />);</script>\` mount.
-- Use \`React.useState\`, \`React.useEffect\`, etc. — the global \`React\` is the only handle you have.
-- Styling: prefer Tailwind via the Play CDN (\`https://cdn.tailwindcss.com\`) loaded in \`<head>\`. For custom rules, write \`styles.css\` and link it normally. Inline \`<style>\` is fine for one-offs.
+- One component per \`.js\` file, written as a native ES module. Filename matches the component name (\`components/Hero.js\` defines and registers \`Hero\`).
+- Use \`htm\` tagged templates instead of JSX: \`return html\\\`<button class="px-4 py-2">\${label}</button>\\\`\`. \`htm\` interpolates components the same way JSX does — \`html\\\`<\${Hero} title=\${title} />\\\`\` — and supports fragments via \`html\\\`<>...<//>\\\`\`.
+- **Cross-file composition.** Because each \`<script type="module" src="X.js">\` is its own module scope and the iframe runs at \`about:srcdoc\` (no resolvable base URL for relative imports), each component module registers itself on a shared global registry: \`window.app = window.app || {}; window.app.Hero = Hero;\`. Other modules read from \`window.app.Hero\`. \`App.js\` composes the tree from \`window.app.*\`. This is the only place a global is acceptable; everything else stays scoped to the module.
+- **Library imports use bare specifiers, not relative paths.** Always \`import React from 'react'\`, never \`import Hero from './components/Hero.js'\` (the latter will not resolve in srcdoc). The importmap in \`index.html\` points bare specifiers at \`esm.sh\`.
+- \`index.html\` must include, in this order in \`<head>\` or top of \`<body>\`:
+  1. \`<script type="importmap">\` with at least \`react\`, \`react-dom/client\`, \`htm/react\`. Pin to a current major (\`react@19\`, \`react-dom@19\`, \`htm@3\`).
+  2. (Optional) \`<script src="https://cdn.tailwindcss.com"></script>\` and/or \`<link rel="stylesheet" href="styles.css">\`.
+- Then in \`<body>\`, after \`<div id="root">\`:
+  3. Each \`components/*.js\` as \`<script type="module" src="components/Foo.js"></script>\`. Order matters: dependencies before dependents.
+  4. Any \`pages/*.js\` next, same pattern.
+  5. \`App.js\` last.
+  6. A small inline \`<script type="module">\` that imports \`createRoot\` and \`html\` and mounts \`<\${App} />\` to \`#root\`. The mount script must run after \`App.js\` has registered \`window.app.App\`.
+- React hooks: \`import { useState, useEffect } from 'react'\`. Use them as named imports, not via \`React.\`.
 - Realistic placeholder content — no \`Lorem ipsum\` unless explicitly requested.
 
-**Minimal index.html skeleton (use this as the template):**
+**Minimal \`index.html\` skeleton (use this as the template, adjusting the component list):**
 
 \`\`\`html
 <!doctype html>
@@ -130,20 +149,47 @@ styles.css        # shared styles (optional; Tailwind CDN is fine in <head>)
     <title>…</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="styles.css" />
+    <script type="importmap">
+      {
+        "imports": {
+          "react": "https://esm.sh/react@19",
+          "react-dom/client": "https://esm.sh/react-dom@19/client",
+          "htm/react": "https://esm.sh/htm@3/react"
+        }
+      }
+    </script>
   </head>
   <body class="bg-neutral-50 text-neutral-900">
     <div id="root"></div>
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script type="text/babel" data-presets="react" src="components/Button.jsx"></script>
-    <script type="text/babel" data-presets="react" src="components/Hero.jsx"></script>
-    <script type="text/babel" data-presets="react" src="App.jsx"></script>
-    <script type="text/babel" data-presets="react">
-      ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    <script type="module" src="components/Button.js"></script>
+    <script type="module" src="components/Hero.js"></script>
+    <script type="module" src="App.js"></script>
+    <script type="module">
+      import { createRoot } from 'react-dom/client';
+      import { html } from 'htm/react';
+      const App = window.app.App;
+      createRoot(document.getElementById('root')).render(html\`<\${App} />\`);
     </script>
   </body>
 </html>
+\`\`\`
+
+**Minimal component module template (\`components/Hero.js\`):**
+
+\`\`\`js
+import { html } from 'htm/react';
+
+function Hero({ title, kicker }) {
+  return html\`
+    <section class="px-8 py-24">
+      <p class="text-sm uppercase tracking-widest text-neutral-500">\${kicker}</p>
+      <h1 class="mt-3 text-5xl font-semibold tracking-tight">\${title}</h1>
+    </section>
+  \`;
+}
+
+window.app = window.app || {};
+window.app.Hero = Hero;
 \`\`\`
 
 ### Shape B — single static HTML (fallback)
@@ -154,13 +200,13 @@ A self-contained \`index.html\` with inline \`<style>\` or a sibling \`styles.cs
 
 When the user comes back with feedback, you are editing an existing project, not regenerating one.
 
-- **Tweaks** ("make the hero darker", "tighten the spacing"): \`Edit\` the existing file in place. Do NOT write a new \`Hero.v2.jsx\` or copy-paste the whole component. \`Read\` the file first if you need to refresh your memory of its contents.
-- **New screens / variants** (the user asks for an alternate look or a different page): add a new file under \`pages/\` (e.g. \`pages/HomeAurora.jsx\`) and either swap which page \`App.jsx\` mounts, or render a small switcher at the top of \`App.jsx\`. Reuse \`components/\` — never copy a \`components/*.jsx\` file just to change its styling for one variant. Parametrize the component instead, or wrap it.
+- **Tweaks** ("make the hero darker", "tighten the spacing"): \`Edit\` the existing file in place. Do NOT write a new \`Hero.v2.js\` or copy-paste the whole component. \`Read\` the file first if you need to refresh your memory of its contents.
+- **New screens / variants** (the user asks for an alternate look or a different page): add a new file under \`pages/\` (e.g. \`pages/HomeAurora.js\`) and either swap which page \`App.js\` mounts, or render a small switcher at the top of \`App.js\`. Reuse \`components/\` — never copy a \`components/*.js\` file just to change its styling for one variant. Parametrize the component instead, or wrap it.
 - **Removed elements**: delete the file you no longer need, and remove the matching \`<script>\` tag from \`index.html\`. Don't leave orphaned files lying around.
 - **Renames**: rename via a fresh \`Write\` of the new file plus an \`Edit\` of \`index.html\` to update the \`<script src>\`. Do not keep both names.
-- Never paste the full source of an unchanged component into chat or a new file — components in \`components/\` are the single source of truth and are referenced by name from anywhere in the app.
+- Never paste the full source of an unchanged component into chat or a new file — modules in \`components/\` are the single source of truth and are referenced from anywhere in the app via \`window.app.*\`.
 
-If you ever feel the urge to write \`Hero2.jsx\`, \`HeroNew.jsx\`, \`HeroFinal.jsx\`, or \`Hero (1).jsx\` — stop. Edit the original.
+If you ever feel the urge to write \`Hero2.js\`, \`HeroNew.js\`, \`HeroFinal.js\`, or \`Hero (1).js\` — stop. Edit the original.
 
 ## After writing
 
@@ -171,7 +217,8 @@ Respond with a brief summary (1-4 bullets) of what changed and which files exist
 - Do not emit a \`${DESIGN_QUESTIONS_BLOCK_TAG_OPEN}\` block.
 - Do not write outside your current working directory.
 - Do not run servers, build tools, or install dependencies.
-- Do not introduce \`import\`/\`export\` syntax in \`.jsx\` files — Babel Standalone evaluates each script in the global scope and module syntax will throw.
+- Do not use Babel, JSX, \`type="text/babel"\`, UMD bundles, or any non-ESM script form. Modules only.
+- Do not write relative \`import\`s between component files (\`./Hero.js\`). They will not resolve in \`about:srcdoc\`. Use the \`window.app.*\` registry pattern.
 
 ## Style guidance
 
@@ -189,7 +236,7 @@ export function renderDesignModeInstructions(input: {
   }
   lines.push(
     "",
-    "Write `index.html` at the top level of this working directory; place components under `components/` and variants under `pages/` as described above.",
+    "Write `index.html` at the top level of this working directory; place ES-module components under `components/` and variants under `pages/` as described above.",
     "",
   );
   return lines.join("\n");
