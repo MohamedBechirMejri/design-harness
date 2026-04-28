@@ -28,6 +28,7 @@ export type MessagesTimelineRow =
       showAssistantCopyButton: boolean;
       assistantTurnDiffSummary?: TurnDiffSummary | undefined;
       revertTurnCount?: number | undefined;
+      canRetry?: boolean | undefined;
     }
   | { kind: "working"; id: string; createdAt: string | null };
 
@@ -115,6 +116,19 @@ export function deriveMessagesTimelineRows(input: {
   );
   const terminalAssistantMessageIds = deriveTerminalAssistantMessageIds(input.timelineEntries);
 
+  // Build a map from each turn's user message → revertTurnCount so the
+  // assistant row in the same turn knows whether retry is available
+  // (i.e. there is a checkpoint to revert to before regenerating).
+  const turnIdsWithRevertableUserMessage = new Set<string>();
+  for (const entry of input.timelineEntries) {
+    if (entry.kind !== "message") continue;
+    if (entry.message.role !== "user") continue;
+    if (!entry.message.turnId) continue;
+    if (input.revertTurnCountByUserMessageId.has(entry.message.id)) {
+      turnIdsWithRevertableUserMessage.add(entry.message.turnId);
+    }
+  }
+
   for (let index = 0; index < input.timelineEntries.length; index += 1) {
     const timelineEntry = input.timelineEntries[index];
     if (!timelineEntry) {
@@ -166,6 +180,11 @@ export function deriveMessagesTimelineRows(input: {
         timelineEntry.message.role === "user"
           ? input.revertTurnCountByUserMessageId.get(timelineEntry.message.id)
           : undefined,
+      canRetry:
+        timelineEntry.message.role === "assistant" &&
+        terminalAssistantMessageIds.has(timelineEntry.message.id) &&
+        timelineEntry.message.turnId != null &&
+        turnIdsWithRevertableUserMessage.has(timelineEntry.message.turnId),
     });
   }
 
@@ -219,7 +238,8 @@ function isRowUnchanged(a: MessagesTimelineRow, b: MessagesTimelineRow): boolean
         a.showCompletionDivider === bm.showCompletionDivider &&
         a.showAssistantCopyButton === bm.showAssistantCopyButton &&
         a.assistantTurnDiffSummary === bm.assistantTurnDiffSummary &&
-        a.revertTurnCount === bm.revertTurnCount
+        a.revertTurnCount === bm.revertTurnCount &&
+        a.canRetry === bm.canRetry
       );
     }
   }

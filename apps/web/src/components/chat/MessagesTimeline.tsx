@@ -23,6 +23,7 @@ import {
   GlobeIcon,
   HammerIcon,
   type LucideIcon,
+  RotateCcwIcon,
   SquarePenIcon,
   TerminalIcon,
   Undo2Icon,
@@ -83,6 +84,7 @@ interface TimelineRowSharedState {
   workspaceRoot: string | undefined;
   activeThreadEnvironmentId: EnvironmentId;
   onRevertUserMessage: (messageId: MessageId) => void;
+  onRetryFromAssistantMessage: (assistantMessageId: MessageId) => void;
   onImageExpand: (preview: ExpandedImagePreview) => void;
   onOpenTurnDiff: (turnId: TurnId, filePath?: string) => void;
   onSubmitDesignAnswers?: (compiledText: string) => void | Promise<void>;
@@ -108,6 +110,7 @@ interface MessagesTimelineProps {
   onOpenTurnDiff: (turnId: TurnId, filePath?: string) => void;
   revertTurnCountByUserMessageId: Map<MessageId, number>;
   onRevertUserMessage: (messageId: MessageId) => void;
+  onRetryFromAssistantMessage: (assistantMessageId: MessageId) => void;
   isRevertingCheckpoint: boolean;
   onImageExpand: (preview: ExpandedImagePreview) => void;
   activeThreadEnvironmentId: EnvironmentId;
@@ -145,6 +148,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   onOpenTurnDiff,
   revertTurnCountByUserMessageId,
   onRevertUserMessage,
+  onRetryFromAssistantMessage,
   isRevertingCheckpoint,
   onImageExpand,
   activeThreadEnvironmentId,
@@ -218,6 +222,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       workspaceRoot,
       activeThreadEnvironmentId,
       onRevertUserMessage,
+      onRetryFromAssistantMessage,
       onImageExpand,
       onOpenTurnDiff,
       ...(onSubmitDesignAnswers ? { onSubmitDesignAnswers } : {}),
@@ -235,6 +240,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       workspaceRoot,
       activeThreadEnvironmentId,
       onRevertUserMessage,
+      onRetryFromAssistantMessage,
       onImageExpand,
       onOpenTurnDiff,
       onSubmitDesignAnswers,
@@ -505,14 +511,29 @@ function TimelineRowContent({ row }: { row: TimelineRow }) {
                       )
                     )}
                   </p>
-                  {assistantCopyState.visible ? (
-                    <div className="flex items-center opacity-0 transition-opacity duration-200  group-hover/assistant:opacity-100">
-                      <MessageCopyButton
-                        text={assistantCopyState.text ?? ""}
-                        size="icon-xs"
-                        variant="outline"
-                        className="border-border/50 bg-background/35 text-muted-foreground/45 shadow-none hover:border-border/70 hover:bg-background/55 hover:text-muted-foreground/70"
-                      />
+                  {assistantCopyState.visible || row.canRetry ? (
+                    <div className="flex items-center gap-1.5 opacity-0 transition-opacity duration-200 group-hover/assistant:opacity-100">
+                      {assistantCopyState.visible ? (
+                        <MessageCopyButton
+                          text={assistantCopyState.text ?? ""}
+                          size="icon-xs"
+                          variant="outline"
+                          className="border-border/50 bg-background/35 text-muted-foreground/45 shadow-none hover:border-border/70 hover:bg-background/55 hover:text-muted-foreground/70"
+                        />
+                      ) : null}
+                      {row.canRetry ? (
+                        <Button
+                          type="button"
+                          size="icon-xs"
+                          variant="outline"
+                          disabled={ctx.isRevertingCheckpoint || ctx.isWorking}
+                          onClick={() => ctx.onRetryFromAssistantMessage(row.message.id)}
+                          title="Retry from this message — reverts to the prior turn and re-sends the user's message"
+                          className="border-border/50 bg-background/35 text-muted-foreground/45 shadow-none hover:border-border/70 hover:bg-background/55 hover:text-muted-foreground/70"
+                        >
+                          <RotateCcwIcon className="size-3" />
+                        </Button>
+                      ) : null}
                     </div>
                   ) : null}
                 </div>

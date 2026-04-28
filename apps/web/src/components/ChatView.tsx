@@ -49,7 +49,7 @@ import {
   togglePendingUserInputOptionSelection,
   type PendingUserInputDraftAnswer,
 } from "../pendingUserInput";
-import { useStore } from "../store";
+import { selectThreadByRef, useStore } from "../store";
 import { createProjectSelectorByRef, createThreadSelectorByRef } from "../storeSelectors";
 import { useUiStateStore } from "../uiStateStore";
 import {
@@ -1684,6 +1684,121 @@ export default function ChatView(props: ChatViewProps) {
     void onRevertToTurnCountRef.current(targetTurnCount);
   }, []);
 
+  // Refs so the retry callback identity stays stable across re-renders.
+  const runtimeModeRef = useRef(runtimeMode);
+  runtimeModeRef.current = runtimeMode;
+  const interactionModeRef = useRef(interactionMode);
+  interactionModeRef.current = interactionMode;
+  const isRevertingCheckpointRef = useRef(isRevertingCheckpoint);
+  isRevertingCheckpointRef.current = isRevertingCheckpoint;
+  const isWorkingRef = useRef(isWorking);
+  isWorkingRef.current = isWorking;
+  const onRetryFromAssistantMessage = useCallback(
+    (assistantMessageId: MessageId) => {
+      void (async () => {
+        const api = readEnvironmentApi(environmentId);
+        if (!api || !activeThread) return;
+        if (isRevertingCheckpointRef.current || isWorkingRef.current) return;
+
+        // Find the user message that produced this assistant turn — same
+        // turnId, role "user", earlier in the timeline.
+        const messages = activeThread.messages;
+        const assistantIdx = messages.findIndex((m) => m.id === assistantMessageId);
+        if (assistantIdx < 1) return;
+        const assistantTurnId = messages[assistantIdx]?.turnId;
+        let userMessage: (typeof messages)[number] | undefined;
+        for (let i = assistantIdx - 1; i >= 0; i -= 1) {
+          const m = messages[i];
+          if (m && m.role === "user" && m.turnId === assistantTurnId) {
+            userMessage = m;
+            break;
+          }
+        }
+        if (!userMessage) return;
+
+        const targetTurnCount = revertTurnCountRef.current.get(userMessage.id);
+        if (typeof targetTurnCount !== "number") return;
+
+        const threadIdForRetry = activeThread.id;
+        const userMessageText = userMessage.text;
+        const hadAttachments = (userMessage.attachments ?? []).length > 0;
+
+        setThreadError(threadIdForRetry, null);
+        setIsRevertingCheckpoint(true);
+        try {
+          await api.orchestration.dispatchCommand({
+            type: "thread.checkpoint.revert",
+            commandId: newCommandId(),
+            threadId: threadIdForRetry,
+            turnCount: targetTurnCount,
+            createdAt: new Date().toISOString(),
+          });
+
+          // Wait for the message projection to reflect the revert before
+          // dispatching the new turn. Reactors run async after the dispatch
+          // resolves, so without this we can race against the SDK's
+          // rollback and start a turn that mixes old and new context.
+          const messageRef = { environmentId, threadId: threadIdForRetry } as const;
+          const expectedMaxLength = assistantIdx;
+          const isReverted = (): boolean => {
+            const thread = selectThreadByRef(useStore.getState(), messageRef);
+            return (thread?.messages.length ?? Infinity) <= expectedMaxLength;
+          };
+          if (!isReverted()) {
+            await new Promise<void>((resolve, reject) => {
+              const timeout = window.setTimeout(() => {
+                unsubscribe();
+                reject(new Error("Revert timed out before retry."));
+              }, 8000);
+              const unsubscribe = useStore.subscribe(() => {
+                if (isReverted()) {
+                  window.clearTimeout(timeout);
+                  unsubscribe();
+                  resolve();
+                }
+              });
+            });
+          }
+
+          await api.orchestration.dispatchCommand({
+            type: "thread.turn.start",
+            commandId: newCommandId(),
+            threadId: threadIdForRetry,
+            message: {
+              messageId: newMessageId(),
+              role: "user",
+              text: userMessageText,
+              // Attachments on the original message are stored references
+              // (no dataUrl); the dispatch shape requires upload payloads.
+              // For the retry MVP we drop them and surface a thread error
+              // hint when present so the user can re-attach manually.
+              attachments: [],
+            },
+            modelSelection: composerRef.current?.getSendContext()?.selectedModelSelection,
+            runtimeMode: runtimeModeRef.current,
+            interactionMode: interactionModeRef.current,
+            createdAt: new Date().toISOString(),
+          });
+
+          if (hadAttachments) {
+            setThreadError(
+              threadIdForRetry,
+              "Retried without the original attachments — re-attach them manually if you want to include them.",
+            );
+          }
+        } catch (err) {
+          setThreadError(
+            threadIdForRetry,
+            err instanceof Error ? err.message : "Failed to retry from this message.",
+          );
+        } finally {
+          setIsRevertingCheckpoint(false);
+        }
+      })();
+    },
+    [activeThread, environmentId, setThreadError],
+  );
+
   // Empty state: no active thread
   if (!activeThread) {
     return <NoActiveThreadState />;
@@ -1735,6 +1850,7 @@ export default function ChatView(props: ChatViewProps) {
               onOpenTurnDiff={onOpenTurnDiff}
               revertTurnCountByUserMessageId={revertTurnCountByUserMessageId}
               onRevertUserMessage={onRevertUserMessage}
+              onRetryFromAssistantMessage={onRetryFromAssistantMessage}
               isRevertingCheckpoint={isRevertingCheckpoint}
               onImageExpand={onExpandTimelineImage}
               markdownCwd={gitCwd ?? undefined}
