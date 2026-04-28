@@ -1672,20 +1672,7 @@ export default function ChatView(props: ChatViewProps) {
     // Design-only build: diff viewer removed.
   }, []);
   // Both the Map and the revert handler are read from refs at call-time so
-  // the callback reference is fully stable and never busts context identity.
-  const revertTurnCountRef = useRef(revertTurnCountByUserMessageId);
-  revertTurnCountRef.current = revertTurnCountByUserMessageId;
-  const onRevertToTurnCountRef = useRef(onRevertToTurnCount);
-  onRevertToTurnCountRef.current = onRevertToTurnCount;
-  const onRevertUserMessage = useCallback((messageId: MessageId) => {
-    const targetTurnCount = revertTurnCountRef.current.get(messageId);
-    if (typeof targetTurnCount !== "number") {
-      return;
-    }
-    void onRevertToTurnCountRef.current(targetTurnCount);
-  }, []);
-
-  // Refs so the retry callback identity stays stable across re-renders.
+  // Refs so the rewind/retry/edit callback identities stay stable.
   const runtimeModeRef = useRef(runtimeMode);
   runtimeModeRef.current = runtimeMode;
   const interactionModeRef = useRef(interactionMode);
@@ -1694,17 +1681,56 @@ export default function ChatView(props: ChatViewProps) {
   isRevertingCheckpointRef.current = isRevertingCheckpoint;
   const isWorkingRef = useRef(isWorking);
   isWorkingRef.current = isWorking;
-  // Shared revert + new-turn dispatch for the retry / edit hover actions.
-  // Both rewind the thread to a turn-checkpoint then re-send a user turn
-  // — they only differ in how they pick which user message to resend and
-  // what text the new turn carries. The wait between the two dispatches
-  // is required because reactors run async after dispatchCommand returns,
-  // so without it we'd race against the SDK rollback.
-  const revertAndResend = useCallback(
+
+  // Pure rewind — drop a user message and everything after, no resend.
+  // This replaces the legacy git-checkpoint undo for design-only threads,
+  // where we just want to control the chat state, not the filesystem.
+  const onRewindToUserMessage = useCallback(
+    (userMessageId: MessageId) => {
+      void (async () => {
+        const api = readEnvironmentApi(environmentId);
+        if (!api || !activeThread) return;
+        if (isRevertingCheckpointRef.current || isWorkingRef.current) return;
+
+        const userIdx = activeThread.messages.findIndex((m) => m.id === userMessageId);
+        if (userIdx < 0) return;
+        const target = activeThread.messages[userIdx];
+        if (!target) return;
+
+        const threadIdForRewind = activeThread.id;
+        setThreadError(threadIdForRewind, null);
+        setIsRevertingCheckpoint(true);
+        try {
+          await api.orchestration.dispatchCommand({
+            type: "thread.rewind",
+            commandId: newCommandId(),
+            threadId: threadIdForRewind,
+            beforeMessageId: userMessageId,
+            createdAt: new Date().toISOString(),
+          });
+        } catch (err) {
+          setThreadError(
+            threadIdForRewind,
+            err instanceof Error ? err.message : "Failed to rewind thread.",
+          );
+        } finally {
+          setIsRevertingCheckpoint(false);
+        }
+      })();
+    },
+    [activeThread, environmentId, setThreadError],
+  );
+  // Shared rewind + new-turn dispatch for the retry / edit hover actions.
+  // Both drop a tail of the conversation at a target user message, then
+  // re-send a fresh user turn with new text. The wait between the two
+  // dispatches is required because the rewind reactor (SDK rollback) runs
+  // async after dispatchCommand returns, so without it we'd race against
+  // the SDK's in-memory turn stack.
+  const rewindAndResend = useCallback(
     async (input: {
       api: NonNullable<ReturnType<typeof readEnvironmentApi>>;
       threadId: ThreadId;
-      targetTurnCount: number;
+      beforeMessageId: MessageId;
       expectedMaxLength: number;
       newText: string;
       hadAttachments: boolean;
@@ -1713,26 +1739,26 @@ export default function ChatView(props: ChatViewProps) {
       setIsRevertingCheckpoint(true);
       try {
         await input.api.orchestration.dispatchCommand({
-          type: "thread.checkpoint.revert",
+          type: "thread.rewind",
           commandId: newCommandId(),
           threadId: input.threadId,
-          turnCount: input.targetTurnCount,
+          beforeMessageId: input.beforeMessageId,
           createdAt: new Date().toISOString(),
         });
 
         const messageRef = { environmentId, threadId: input.threadId } as const;
-        const isReverted = (): boolean => {
+        const isRewound = (): boolean => {
           const thread = selectThreadByRef(useStore.getState(), messageRef);
           return (thread?.messages.length ?? Infinity) <= input.expectedMaxLength;
         };
-        if (!isReverted()) {
+        if (!isRewound()) {
           await new Promise<void>((resolve, reject) => {
             const timeout = window.setTimeout(() => {
               unsubscribe();
-              reject(new Error("Revert timed out before resend."));
+              reject(new Error("Rewind timed out before resend."));
             }, 8000);
             const unsubscribe = useStore.subscribe(() => {
-              if (isReverted()) {
+              if (isRewound()) {
                 window.clearTimeout(timeout);
                 unsubscribe();
                 resolve();
@@ -1749,9 +1775,9 @@ export default function ChatView(props: ChatViewProps) {
             messageId: newMessageId(),
             role: "user",
             text: input.newText,
-            // See revert/retry note: stored attachments lack the
-            // dataUrl that the upload-shaped dispatch needs, so the MVP
-            // re-sends text-only and surfaces a hint.
+            // Stored attachments only carry an id (no dataUrl), and the
+            // dispatch shape needs upload payloads. MVP re-sends text-
+            // only and surfaces a hint when the original had attachments.
             attachments: [],
           },
           modelSelection: composerRef.current?.getSendContext()?.selectedModelSelection,
@@ -1786,35 +1812,36 @@ export default function ChatView(props: ChatViewProps) {
         if (isRevertingCheckpointRef.current || isWorkingRef.current) return;
 
         // Find the user message that produced this assistant turn — same
-        // turnId, role "user", earlier in the timeline.
+        // turnId, role "user", earlier in the timeline. Rewind drops that
+        // user message and everything after, then we resend its text as
+        // a fresh turn.
         const messages = activeThread.messages;
         const assistantIdx = messages.findIndex((m) => m.id === assistantMessageId);
         if (assistantIdx < 1) return;
         const assistantTurnId = messages[assistantIdx]?.turnId;
-        let userMessage: (typeof messages)[number] | undefined;
+        let userIdx = -1;
         for (let i = assistantIdx - 1; i >= 0; i -= 1) {
           const m = messages[i];
           if (m && m.role === "user" && m.turnId === assistantTurnId) {
-            userMessage = m;
+            userIdx = i;
             break;
           }
         }
+        if (userIdx < 0) return;
+        const userMessage = messages[userIdx];
         if (!userMessage) return;
 
-        const targetTurnCount = revertTurnCountRef.current.get(userMessage.id);
-        if (typeof targetTurnCount !== "number") return;
-
-        await revertAndResend({
+        await rewindAndResend({
           api,
           threadId: activeThread.id,
-          targetTurnCount,
-          expectedMaxLength: assistantIdx,
+          beforeMessageId: userMessage.id,
+          expectedMaxLength: userIdx,
           newText: userMessage.text,
           hadAttachments: (userMessage.attachments ?? []).length > 0,
         });
       })();
     },
-    [activeThread, environmentId, revertAndResend],
+    [activeThread, environmentId, rewindAndResend],
   );
 
   const onEditUserMessage = useCallback(
@@ -1833,25 +1860,22 @@ export default function ChatView(props: ChatViewProps) {
         const userMessage = messages[userIdx];
         if (!userMessage || userMessage.role !== "user") return;
 
-        const targetTurnCount = revertTurnCountRef.current.get(userMessageId);
-        if (typeof targetTurnCount !== "number") return;
-
-        await revertAndResend({
+        await rewindAndResend({
           api,
           threadId: activeThread.id,
-          targetTurnCount,
+          beforeMessageId: userMessageId,
           expectedMaxLength: userIdx,
           newText: trimmed,
           hadAttachments: (userMessage.attachments ?? []).length > 0,
         });
       })();
     },
-    [activeThread, environmentId, revertAndResend],
+    [activeThread, environmentId, rewindAndResend],
   );
 
   const [isForking, setIsForking] = useState(false);
-  const onForkThread = useCallback(() => {
-    void (async () => {
+  const dispatchFork = useCallback(
+    async (atMessageId: MessageId | undefined) => {
       const api = readEnvironmentApi(environmentId);
       if (!api || !activeThread || isForking) return;
       // Forking a local-draft thread doesn't make sense — there's nothing
@@ -1868,6 +1892,7 @@ export default function ChatView(props: ChatViewProps) {
           sourceThreadId: activeThread.id,
           newThreadId: forkedThreadId,
           title: newTitle,
+          ...(atMessageId !== undefined ? { atMessageId } : {}),
           createdAt: new Date().toISOString(),
         });
         await navigate({
@@ -1884,8 +1909,18 @@ export default function ChatView(props: ChatViewProps) {
       } finally {
         setIsForking(false);
       }
-    })();
-  }, [activeThread, environmentId, isForking, isServerThread, navigate, setThreadError]);
+    },
+    [activeThread, environmentId, isForking, isServerThread, navigate, setThreadError],
+  );
+  const onForkThread = useCallback(() => {
+    void dispatchFork(undefined);
+  }, [dispatchFork]);
+  const onForkFromMessage = useCallback(
+    (messageId: MessageId) => {
+      void dispatchFork(messageId);
+    },
+    [dispatchFork],
+  );
 
   // Empty state: no active thread
   if (!activeThread) {
@@ -1950,10 +1985,10 @@ export default function ChatView(props: ChatViewProps) {
               activeThreadEnvironmentId={activeThread.environmentId}
               routeThreadKey={routeThreadKey}
               onOpenTurnDiff={onOpenTurnDiff}
-              revertTurnCountByUserMessageId={revertTurnCountByUserMessageId}
-              onRevertUserMessage={onRevertUserMessage}
+              onRewindToUserMessage={onRewindToUserMessage}
               onRetryFromAssistantMessage={onRetryFromAssistantMessage}
               onEditUserMessage={onEditUserMessage}
+              onForkFromMessage={onForkFromMessage}
               isRevertingCheckpoint={isRevertingCheckpoint}
               onImageExpand={onExpandTimelineImage}
               markdownCwd={gitCwd ?? undefined}

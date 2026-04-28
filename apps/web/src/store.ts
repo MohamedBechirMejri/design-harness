@@ -1603,6 +1603,26 @@ function applyEnvironmentOrchestrationEvent(
         };
       });
 
+    case "thread.rewound":
+      return updateThreadState(state, event.payload.threadId, (thread) => {
+        const cutoff = event.payload.beforeCreatedAt;
+        const messages = thread.messages.filter((message) => message.createdAt < cutoff);
+        if (messages.length === thread.messages.length) {
+          return thread;
+        }
+        return {
+          ...thread,
+          messages,
+          // Drop in-flight UI state tied to the now-truncated turns. The
+          // server side resets checkpoints / activities separately when
+          // they're git-tracked; for the chat-only rewind we just clear
+          // latestTurn so the composer doesn't think a turn is in flight.
+          latestTurn: null,
+          pendingSourceProposedPlan: undefined,
+          updatedAt: event.occurredAt,
+        };
+      });
+
     case "thread.activity-appended":
       return updateThreadState(state, event.payload.threadId, (thread) => {
         const activities = [

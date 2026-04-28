@@ -25,6 +25,7 @@ import {
   GlobeIcon,
   HammerIcon,
   type LucideIcon,
+  GitBranchIcon,
   PencilIcon,
   RotateCcwIcon,
   SquarePenIcon,
@@ -86,9 +87,10 @@ interface TimelineRowSharedState {
   resolvedTheme: "light" | "dark";
   workspaceRoot: string | undefined;
   activeThreadEnvironmentId: EnvironmentId;
-  onRevertUserMessage: (messageId: MessageId) => void;
+  onRewindToUserMessage: (messageId: MessageId) => void;
   onRetryFromAssistantMessage: (assistantMessageId: MessageId) => void;
   onEditUserMessage: (userMessageId: MessageId, newText: string) => void;
+  onForkFromMessage: (messageId: MessageId) => void;
   editingUserMessageId: MessageId | null;
   setEditingUserMessageId: (next: MessageId | null) => void;
   onImageExpand: (preview: ExpandedImagePreview) => void;
@@ -114,10 +116,10 @@ interface MessagesTimelineProps {
   turnDiffSummaryByAssistantMessageId: Map<MessageId, TurnDiffSummary>;
   routeThreadKey: string;
   onOpenTurnDiff: (turnId: TurnId, filePath?: string) => void;
-  revertTurnCountByUserMessageId: Map<MessageId, number>;
-  onRevertUserMessage: (messageId: MessageId) => void;
+  onRewindToUserMessage: (messageId: MessageId) => void;
   onRetryFromAssistantMessage: (assistantMessageId: MessageId) => void;
   onEditUserMessage: (userMessageId: MessageId, newText: string) => void;
+  onForkFromMessage: (messageId: MessageId) => void;
   isRevertingCheckpoint: boolean;
   onImageExpand: (preview: ExpandedImagePreview) => void;
   activeThreadEnvironmentId: EnvironmentId;
@@ -153,10 +155,10 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   turnDiffSummaryByAssistantMessageId,
   routeThreadKey,
   onOpenTurnDiff,
-  revertTurnCountByUserMessageId,
-  onRevertUserMessage,
+  onRewindToUserMessage,
   onRetryFromAssistantMessage,
   onEditUserMessage,
+  onForkFromMessage,
   isRevertingCheckpoint,
   onImageExpand,
   activeThreadEnvironmentId,
@@ -176,7 +178,6 @@ export const MessagesTimeline = memo(function MessagesTimeline({
         isWorking,
         activeTurnStartedAt,
         turnDiffSummaryByAssistantMessageId,
-        revertTurnCountByUserMessageId,
       }),
     [
       timelineEntries,
@@ -184,7 +185,6 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       isWorking,
       activeTurnStartedAt,
       turnDiffSummaryByAssistantMessageId,
-      revertTurnCountByUserMessageId,
     ],
   );
   const rows = useStableRows(rawRows);
@@ -233,9 +233,10 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       resolvedTheme,
       workspaceRoot,
       activeThreadEnvironmentId,
-      onRevertUserMessage,
+      onRewindToUserMessage,
       onRetryFromAssistantMessage,
       onEditUserMessage,
+      onForkFromMessage,
       editingUserMessageId,
       setEditingUserMessageId,
       onImageExpand,
@@ -254,9 +255,10 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       resolvedTheme,
       workspaceRoot,
       activeThreadEnvironmentId,
-      onRevertUserMessage,
+      onRewindToUserMessage,
       onRetryFromAssistantMessage,
       onEditUserMessage,
+      onForkFromMessage,
       editingUserMessageId,
       onImageExpand,
       onOpenTurnDiff,
@@ -360,7 +362,7 @@ function TimelineRowContent({ row }: { row: TimelineRow }) {
           const userImages = row.message.attachments ?? [];
           const displayedUserMessage = deriveDisplayedUserMessageState(row.message.text);
           const terminalContexts = displayedUserMessage.contexts;
-          const canRevertAgentWork = typeof row.revertTurnCount === "number";
+          const canRewind = row.canRewind === true;
           const isEditing = ctx.editingUserMessageId === row.message.id;
           if (isEditing) {
             return (
@@ -426,7 +428,7 @@ function TimelineRowContent({ row }: { row: TimelineRow }) {
                     {displayedUserMessage.copyText && (
                       <MessageCopyButton text={displayedUserMessage.copyText} />
                     )}
-                    {canRevertAgentWork && (
+                    {canRewind && (
                       <Button
                         type="button"
                         size="xs"
@@ -438,14 +440,26 @@ function TimelineRowContent({ row }: { row: TimelineRow }) {
                         <PencilIcon className="size-3" />
                       </Button>
                     )}
-                    {canRevertAgentWork && (
+                    {canRewind && (
                       <Button
                         type="button"
                         size="xs"
                         variant="outline"
                         disabled={ctx.isRevertingCheckpoint || ctx.isWorking}
-                        onClick={() => ctx.onRevertUserMessage(row.message.id)}
-                        title="Revert to this message"
+                        onClick={() => ctx.onForkFromMessage(row.message.id)}
+                        title="Fork from this message — copy the conversation up to here into a new thread"
+                      >
+                        <GitBranchIcon className="size-3" />
+                      </Button>
+                    )}
+                    {canRewind && (
+                      <Button
+                        type="button"
+                        size="xs"
+                        variant="outline"
+                        disabled={ctx.isRevertingCheckpoint || ctx.isWorking}
+                        onClick={() => ctx.onRewindToUserMessage(row.message.id)}
+                        title="Revert to this message — drops it and everything after"
                       >
                         <Undo2Icon className="size-3" />
                       </Button>
@@ -576,6 +590,19 @@ function TimelineRowContent({ row }: { row: TimelineRow }) {
                           className="border-border/50 bg-background/35 text-muted-foreground/45 shadow-none hover:border-border/70 hover:bg-background/55 hover:text-muted-foreground/70"
                         >
                           <RotateCcwIcon className="size-3" />
+                        </Button>
+                      ) : null}
+                      {row.canRetry ? (
+                        <Button
+                          type="button"
+                          size="icon-xs"
+                          variant="outline"
+                          disabled={ctx.isRevertingCheckpoint || ctx.isWorking}
+                          onClick={() => ctx.onForkFromMessage(row.message.id)}
+                          title="Fork from this message — copy the conversation up to here into a new thread"
+                          className="border-border/50 bg-background/35 text-muted-foreground/45 shadow-none hover:border-border/70 hover:bg-background/55 hover:text-muted-foreground/70"
+                        >
+                          <GitBranchIcon className="size-3" />
                         </Button>
                       ) : null}
                     </div>

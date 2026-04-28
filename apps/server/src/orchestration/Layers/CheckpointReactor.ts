@@ -729,6 +729,22 @@ const make = Effect.gen(function* () {
       return;
     }
 
+    if (event.type === "thread.rewound") {
+      // Pure chat-state rewind — no filesystem restore, no git
+      // requirement. Roll the SDK session back the same number of turns
+      // we just dropped from the projection, so the next user turn boots
+      // a fresh provider context aligned with the truncated history.
+      if (event.payload.numTurnsDropped > 0) {
+        yield* providerService
+          .rollbackConversation({
+            threadId: event.payload.threadId,
+            numTurns: event.payload.numTurnsDropped,
+          })
+          .pipe(Effect.catch(() => Effect.void));
+      }
+      return;
+    }
+
     // When ProviderRuntimeIngestion creates a placeholder checkpoint (status "missing")
     // from a turn.diff.updated runtime event, capture the real git checkpoint to
     // replace it. The providerService.streamEvents PubSub does not reliably deliver

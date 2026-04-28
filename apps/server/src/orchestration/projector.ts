@@ -23,6 +23,7 @@ import {
   ThreadRuntimeModeSetPayload,
   ThreadUnarchivedPayload,
   ThreadRevertedPayload,
+  ThreadRewoundPayload,
   ThreadSessionSetPayload,
   ThreadTurnDiffCompletedPayload,
 } from "./Schemas.ts";
@@ -612,6 +613,34 @@ export function projectEvent(
               proposedPlans,
               activities,
               latestTurn,
+              updatedAt: event.occurredAt,
+            }),
+          };
+        }),
+      );
+
+    case "thread.rewound":
+      return decodeForEvent(ThreadRewoundPayload, event.payload, event.type, "payload").pipe(
+        Effect.map((payload) => {
+          const thread = nextBase.threads.find((entry) => entry.id === payload.threadId);
+          if (!thread) {
+            return nextBase;
+          }
+          const messages = thread.messages.filter(
+            (message) => message.createdAt < payload.beforeCreatedAt,
+          );
+          if (messages.length === thread.messages.length) {
+            return nextBase;
+          }
+          // Reset latestTurn — it pointed at a turn we just dropped.
+          // Activities/proposed plans tied to the dropped turns become
+          // dangling, but their cleanup isn't critical for the chat-only
+          // rewind use case; if needed later we can scope them by turnId.
+          return {
+            ...nextBase,
+            threads: updateThread(nextBase.threads, payload.threadId, {
+              messages,
+              latestTurn: null,
               updatedAt: event.occurredAt,
             }),
           };
