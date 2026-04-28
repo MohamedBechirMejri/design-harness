@@ -10,6 +10,9 @@ import {
   HttpServerRequest,
 } from "effect/unstable/http";
 import { OtlpTracer } from "effect/unstable/observability";
+import * as esbuild from "esbuild";
+
+import { ThreadId } from "@dh/contracts";
 
 import {
   ATTACHMENTS_ROUTE_PREFIX,
@@ -24,6 +27,7 @@ import { ProjectFaviconResolver } from "./project/Services/ProjectFaviconResolve
 import { ServerAuth } from "./auth/Services/ServerAuth.ts";
 import { respondToAuthError } from "./auth/http.ts";
 import { ServerEnvironment } from "./environment/Services/ServerEnvironment.ts";
+import { WorkspaceFileSystem } from "./workspace/Services/WorkspaceFileSystem.ts";
 
 const PROJECT_FAVICON_CACHE_CONTROL = "public, max-age=3600";
 const FALLBACK_PROJECT_FAVICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#6b728080" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-fallback="project-favicon"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2Z"/></svg>`;
@@ -72,6 +76,15 @@ export const serverEnvironmentRouteLayer = HttpRouter.add(
 class DecodeOtlpTraceRecordsError extends Data.TaggedError("DecodeOtlpTraceRecordsError")<{
   readonly cause: unknown;
   readonly bodyJson: OtlpTracer.TraceData;
+}> {}
+
+class DesignPreviewCwdDecodeError extends Data.TaggedError("DesignPreviewCwdDecodeError")<{
+  readonly cause: unknown;
+}> {}
+
+class DesignPreviewTransformError extends Data.TaggedError("DesignPreviewTransformError")<{
+  readonly cause: unknown;
+  readonly relativePath: string;
 }> {}
 
 export const otlpTracesProxyRouteLayer = HttpRouter.add(
@@ -176,6 +189,135 @@ export const attachmentsRouteLayer = HttpRouter.add(
         Effect.succeed(HttpServerResponse.text("Internal Server Error", { status: 500 })),
       ),
     );
+  }).pipe(Effect.catchTag("AuthError", respondToAuthError)),
+);
+
+export const DESIGN_PREVIEW_ROUTE_PREFIX = "/api/design-preview";
+
+const DESIGN_PREVIEW_TRANSFORM_LOADERS: Record<string, "tsx" | "ts" | "jsx"> = {
+  ".tsx": "tsx",
+  ".ts": "ts",
+  ".jsx": "jsx",
+};
+
+const DESIGN_PREVIEW_CONTENT_TYPES: Record<string, string> = {
+  ".html": "text/html; charset=utf-8",
+  ".htm": "text/html; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".js": "application/javascript; charset=utf-8",
+  ".mjs": "application/javascript; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".svg": "image/svg+xml",
+  ".txt": "text/plain; charset=utf-8",
+  ".md": "text/markdown; charset=utf-8",
+};
+
+// URL: /api/design-preview/<encoded-cwd>/<threadId>/<relativePath...>
+//
+// The cwd is encodeURIComponent-ed so it lives in a single path segment,
+// which lets relative ESM imports resolve correctly: a module loaded at
+// /api/design-preview/<cwd>/<thread>/App.tsx that imports './Hero.tsx'
+// fetches /api/design-preview/<cwd>/<thread>/Hero.tsx — same prefix, just
+// the trailing path swapped.
+//
+// .ts / .tsx / .jsx are transformed on the fly by esbuild to ESM JS with
+// React 19 automatic JSX runtime, so the model can write real TypeScript
+// + JSX with proper imports between component files. Everything else is
+// served as-is with a content type inferred from extension.
+export const designPreviewRouteLayer = HttpRouter.add(
+  "GET",
+  `${DESIGN_PREVIEW_ROUTE_PREFIX}/*`,
+  Effect.gen(function* () {
+    yield* requireAuthenticatedRequest;
+    const request = yield* HttpServerRequest.HttpServerRequest;
+    const url = HttpServerRequest.toURL(request);
+    if (Option.isNone(url)) {
+      return HttpServerResponse.text("Bad Request", { status: 400 });
+    }
+
+    const tail = url.value.pathname
+      .slice(DESIGN_PREVIEW_ROUTE_PREFIX.length)
+      .replace(/^\/+/, "");
+    const firstSlash = tail.indexOf("/");
+    if (firstSlash <= 0) {
+      return HttpServerResponse.text("Bad Request", { status: 400 });
+    }
+    const encodedCwd = tail.slice(0, firstSlash);
+    const afterCwd = tail.slice(firstSlash + 1);
+    const secondSlash = afterCwd.indexOf("/");
+    if (secondSlash <= 0) {
+      return HttpServerResponse.text("Bad Request", { status: 400 });
+    }
+    const threadId = afterCwd.slice(0, secondSlash);
+    let relativePath = afterCwd.slice(secondSlash + 1);
+    if (relativePath.length === 0 || relativePath.endsWith("/")) {
+      relativePath = `${relativePath}index.html`;
+    }
+
+    if (!/^[A-Za-z0-9_-]+$/.test(threadId)) {
+      return HttpServerResponse.text("Invalid threadId", { status: 400 });
+    }
+
+    const cwd = yield* Effect.try({
+      try: () => decodeURIComponent(encodedCwd),
+      catch: (cause) => new DesignPreviewCwdDecodeError({ cause }),
+    }).pipe(Effect.catch(() => Effect.succeed(null)));
+    if (cwd === null) {
+      return HttpServerResponse.text("Invalid cwd encoding", { status: 400 });
+    }
+
+    const workspaceFs = yield* WorkspaceFileSystem;
+    const result = yield* workspaceFs
+      .readDesignFile({ cwd, threadId: ThreadId.make(threadId), relativePath })
+      .pipe(Effect.catch(() => Effect.succeed(null)));
+    if (!result) {
+      return HttpServerResponse.text("Not Found", { status: 404 });
+    }
+
+    const path = yield* Path.Path;
+    const ext = path.extname(relativePath).toLowerCase();
+    const transformLoader = DESIGN_PREVIEW_TRANSFORM_LOADERS[ext];
+
+    if (transformLoader) {
+      const transformed = yield* Effect.tryPromise({
+        try: () =>
+          esbuild.transform(result.contents, {
+            loader: transformLoader,
+            format: "esm",
+            target: "es2022",
+            jsx: "automatic",
+            jsxImportSource: "react",
+            sourcemap: "inline",
+            sourcefile: relativePath,
+          }),
+        catch: (cause) => new DesignPreviewTransformError({ cause, relativePath }),
+      }).pipe(Effect.catch(() => Effect.succeed(null)));
+
+      if (!transformed) {
+        // Surface a JS-shaped error so the iframe console actually shows it
+        // instead of silently failing the module fetch.
+        return HttpServerResponse.text(
+          `throw new Error(${JSON.stringify(`design-harness: failed to transform ${relativePath}`)});`,
+          {
+            status: 200,
+            contentType: "application/javascript; charset=utf-8",
+            headers: { "Cache-Control": "no-store" },
+          },
+        );
+      }
+      return HttpServerResponse.text(transformed.code, {
+        status: 200,
+        contentType: "application/javascript; charset=utf-8",
+        headers: { "Cache-Control": "no-store" },
+      });
+    }
+
+    const contentType = DESIGN_PREVIEW_CONTENT_TYPES[ext] ?? "application/octet-stream";
+    return HttpServerResponse.text(result.contents, {
+      status: 200,
+      contentType,
+      headers: { "Cache-Control": "no-store" },
+    });
   }).pipe(Effect.catchTag("AuthError", respondToAuthError)),
 );
 
