@@ -247,6 +247,24 @@ function messageFromClaudeStreamCause(cause: Cause.Cause<Error>, fallback: strin
   return normalizeClaudeStreamMessages(cause)[0] ?? fallback;
 }
 
+// The Claude Code CLI rejects a query whose `--resume <id>` points at a
+// session-id JSONL that no longer exists on disk (cleaned up between dev
+// server restarts, or written under a different cwd encoding). The SDK
+// surfaces this as either an Error("Claude Code returned an error result:
+// No conversation found with session ID: <uuid>") or a result message
+// whose errors[] array includes the same text. When we see it we drop the
+// stored cursor so the next turn starts a fresh SDK session — the harness
+// keeps the user-facing chat history in its own sqlite, so the only thing
+// lost is Claude's in-context memory of prior turns.
+const MISSING_CONVERSATION_PATTERN = /no conversation found with session id/i;
+
+function isMissingConversationMessage(text: string | undefined): boolean {
+  return text !== undefined && MISSING_CONVERSATION_PATTERN.test(text);
+}
+
+const MISSING_CONVERSATION_USER_MESSAGE =
+  "Claude's session memory was lost (its on-disk session file is gone — usually after a dev server restart or cleanup). Conversation history in this thread is preserved; please re-send your last message and Claude will reply with a fresh context.";
+
 function interruptionMessageFromClaudeCause(cause: Cause.Cause<Error>): string {
   const message = messageFromClaudeStreamCause(cause, "Claude runtime interrupted.");
   return isClaudeInterruptedMessage(message) ? "Claude runtime interrupted." : message;
@@ -2015,7 +2033,15 @@ const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
     }
 
     const status = turnStatusFromResult(message);
-    const errorMessage = message.subtype === "success" ? undefined : message.errors[0];
+    const rawErrorMessage = message.subtype === "success" ? undefined : message.errors[0];
+    const isMissingConversation = isMissingConversationMessage(rawErrorMessage);
+    if (isMissingConversation) {
+      context.resumeSessionId = undefined;
+      context.lastAssistantUuid = undefined;
+    }
+    const errorMessage = isMissingConversation
+      ? MISSING_CONVERSATION_USER_MESSAGE
+      : rawErrorMessage;
 
     if (status === "failed") {
       yield* emitRuntimeError(context, errorMessage ?? "Claude turn failed.");
@@ -2362,7 +2388,19 @@ const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
           );
         }
       } else {
-        const message = messageFromClaudeStreamCause(exit.cause, "Claude runtime stream failed.");
+        const rawMessage = messageFromClaudeStreamCause(
+          exit.cause,
+          "Claude runtime stream failed.",
+        );
+        const isMissingConversation = isMissingConversationMessage(rawMessage);
+        if (isMissingConversation) {
+          // Drop the stale resume cursor — completeTurn → updateResumeCursor
+          // will then persist a cursor with no `resume`/`resumeSessionAt`,
+          // so the next turn restarts the SDK with a fresh session id.
+          context.resumeSessionId = undefined;
+          context.lastAssistantUuid = undefined;
+        }
+        const message = isMissingConversation ? MISSING_CONVERSATION_USER_MESSAGE : rawMessage;
         yield* emitRuntimeError(context, message, Cause.pretty(exit.cause));
         yield* completeTurn(context, "failed", message);
       }
