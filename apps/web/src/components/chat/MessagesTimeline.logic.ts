@@ -118,17 +118,24 @@ export function deriveMessagesTimelineRows(input: {
   );
   const terminalAssistantMessageIds = deriveTerminalAssistantMessageIds(input.timelineEntries);
 
-  // Track which turns have a server-anchored user message so the
-  // assistant row in the same turn knows whether retry can target it.
-  // Retry needs a user message to re-send, and a rewind primitive that
-  // can drop everything from there — both are messageId-based and don't
-  // depend on git checkpoints.
+  // Track which turns have a server-anchored user message preceding the
+  // assistant message so the retry button knows there's something to
+  // re-send. User messages from thread.turn.start arrive with
+  // turnId=null in the projection (the dispatch doesn't stamp one), so
+  // we anchor the relationship via timeline ordering: each user message
+  // pairs with the next assistant message that has a turnId.
   const turnIdsWithUserMessage = new Set<string>();
+  let pendingUserMessage = false;
   for (const entry of input.timelineEntries) {
     if (entry.kind !== "message") continue;
-    if (entry.message.role !== "user") continue;
-    if (!entry.message.turnId) continue;
-    turnIdsWithUserMessage.add(entry.message.turnId);
+    if (entry.message.role === "user") {
+      pendingUserMessage = true;
+      continue;
+    }
+    if (entry.message.role === "assistant" && entry.message.turnId && pendingUserMessage) {
+      turnIdsWithUserMessage.add(entry.message.turnId);
+      pendingUserMessage = false;
+    }
   }
 
   for (let index = 0; index < input.timelineEntries.length; index += 1) {
@@ -178,11 +185,19 @@ export function deriveMessagesTimelineRows(input: {
         timelineEntry.message.role === "assistant"
           ? input.turnDiffSummaryByAssistantMessageId.get(timelineEntry.message.id)
           : undefined,
-      canRewind:
-        timelineEntry.message.role === "user" && timelineEntry.message.turnId != null,
+      // canRewind: any non-streaming user message can be the target of
+      //   a rewind / edit / fork-from-here. The server validates the
+      //   messageId exists in the projection, so optimistic-only
+      //   messages (UI-side draft echoes) error out cleanly. Don't
+      //   gate on turnId — user messages from thread.turn.start arrive
+      //   with turnId=null in the projection.
+      // canRetry: terminal assistant message in a turn that had a user
+      //   message preceding it.
+      canRewind: timelineEntry.message.role === "user" && !timelineEntry.message.streaming,
       canRetry:
         timelineEntry.message.role === "assistant" &&
         terminalAssistantMessageIds.has(timelineEntry.message.id) &&
+        !timelineEntry.message.streaming &&
         timelineEntry.message.turnId != null &&
         turnIdsWithUserMessage.has(timelineEntry.message.turnId),
     });
