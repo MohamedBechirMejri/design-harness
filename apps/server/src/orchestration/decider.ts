@@ -566,6 +566,84 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
       };
     }
 
+    case "thread.fork": {
+      const sourceThread = yield* requireThread({
+        readModel,
+        command,
+        threadId: command.sourceThreadId,
+      });
+      // Fork is implemented as a self-contained event sequence:
+      //   1. thread.created   — new thread shell, copying source's
+      //      project / model / runtime mode / interaction mode / branch.
+      //   2. thread.message-sent × N — one per source message, with
+      //      freshly minted messageIds (the projection schema requires a
+      //      globally unique message_id PK) but reusing each source
+      //      message's turnId (projection_turns is keyed on
+      //      (thread_id, turn_id), so collisions don't happen).
+      //   3. thread.forked    — marker so the client can navigate /
+      //      record analytics; carries no message payload.
+      //
+      // Emitting concrete thread.message-sent events keeps the in-memory
+      // read model, the sqlite projection, and the client store all in
+      // sync without a custom copy code path on each side.
+      const createdEvent = {
+        ...withEventBase({
+          aggregateKind: "thread" as const,
+          aggregateId: command.newThreadId,
+          occurredAt: command.createdAt,
+          commandId: command.commandId,
+        }),
+        type: "thread.created" as const,
+        payload: {
+          threadId: command.newThreadId,
+          projectId: sourceThread.projectId,
+          title: command.title,
+          modelSelection: sourceThread.modelSelection,
+          runtimeMode: sourceThread.runtimeMode,
+          interactionMode: sourceThread.interactionMode,
+          branch: sourceThread.branch,
+          worktreePath: sourceThread.worktreePath,
+          createdAt: command.createdAt,
+          updatedAt: command.createdAt,
+        },
+      };
+      const messageEvents = sourceThread.messages.map((message) => ({
+        ...withEventBase({
+          aggregateKind: "thread" as const,
+          aggregateId: command.newThreadId,
+          occurredAt: command.createdAt,
+          commandId: command.commandId,
+        }),
+        type: "thread.message-sent" as const,
+        payload: {
+          threadId: command.newThreadId,
+          messageId: crypto.randomUUID() as (typeof message)["id"],
+          role: message.role,
+          text: message.text,
+          ...(message.attachments !== undefined ? { attachments: message.attachments } : {}),
+          turnId: message.turnId,
+          streaming: false,
+          createdAt: message.createdAt,
+          updatedAt: message.updatedAt,
+        },
+      }));
+      const forkedEvent = {
+        ...withEventBase({
+          aggregateKind: "thread" as const,
+          aggregateId: command.newThreadId,
+          occurredAt: command.createdAt,
+          commandId: command.commandId,
+        }),
+        type: "thread.forked" as const,
+        payload: {
+          sourceThreadId: command.sourceThreadId,
+          newThreadId: command.newThreadId,
+          createdAt: command.createdAt,
+        },
+      };
+      return [createdEvent, ...messageEvents, forkedEvent];
+    }
+
     case "thread.session.set": {
       yield* requireThread({
         readModel,

@@ -49,7 +49,7 @@ import {
   togglePendingUserInputOptionSelection,
   type PendingUserInputDraftAnswer,
 } from "../pendingUserInput";
-import { useStore } from "../store";
+import { selectThreadByRef, useStore } from "../store";
 import { createProjectSelectorByRef, createThreadSelectorByRef } from "../storeSelectors";
 import { useUiStateStore } from "../uiStateStore";
 import {
@@ -68,10 +68,11 @@ import { useCommandPaletteStore } from "../commandPaletteStore";
 import { resolveShortcutCommand } from "../keybindings";
 import DesignPreviewSidebar from "./DesignPreviewSidebar";
 import { AppTopBar } from "./AppTopBar";
-import { ChevronDownIcon } from "lucide-react";
+import { ChevronDownIcon, GitBranchIcon } from "lucide-react";
 import { cn, randomUUID } from "~/lib/utils";
 import { toastManager } from "./ui/toast";
 import { newCommandId, newMessageId, newThreadId } from "~/lib/utils";
+import { buildThreadRouteParams } from "../threadRoutes";
 import { getProviderModelCapabilities, resolveSelectableProvider } from "../providerModels";
 import { useSettings } from "../hooks/useSettings";
 import { resolveAppModelSelection } from "../modelSelection";
@@ -1684,6 +1685,208 @@ export default function ChatView(props: ChatViewProps) {
     void onRevertToTurnCountRef.current(targetTurnCount);
   }, []);
 
+  // Refs so the retry callback identity stays stable across re-renders.
+  const runtimeModeRef = useRef(runtimeMode);
+  runtimeModeRef.current = runtimeMode;
+  const interactionModeRef = useRef(interactionMode);
+  interactionModeRef.current = interactionMode;
+  const isRevertingCheckpointRef = useRef(isRevertingCheckpoint);
+  isRevertingCheckpointRef.current = isRevertingCheckpoint;
+  const isWorkingRef = useRef(isWorking);
+  isWorkingRef.current = isWorking;
+  // Shared revert + new-turn dispatch for the retry / edit hover actions.
+  // Both rewind the thread to a turn-checkpoint then re-send a user turn
+  // — they only differ in how they pick which user message to resend and
+  // what text the new turn carries. The wait between the two dispatches
+  // is required because reactors run async after dispatchCommand returns,
+  // so without it we'd race against the SDK rollback.
+  const revertAndResend = useCallback(
+    async (input: {
+      api: NonNullable<ReturnType<typeof readEnvironmentApi>>;
+      threadId: ThreadId;
+      targetTurnCount: number;
+      expectedMaxLength: number;
+      newText: string;
+      hadAttachments: boolean;
+    }) => {
+      setThreadError(input.threadId, null);
+      setIsRevertingCheckpoint(true);
+      try {
+        await input.api.orchestration.dispatchCommand({
+          type: "thread.checkpoint.revert",
+          commandId: newCommandId(),
+          threadId: input.threadId,
+          turnCount: input.targetTurnCount,
+          createdAt: new Date().toISOString(),
+        });
+
+        const messageRef = { environmentId, threadId: input.threadId } as const;
+        const isReverted = (): boolean => {
+          const thread = selectThreadByRef(useStore.getState(), messageRef);
+          return (thread?.messages.length ?? Infinity) <= input.expectedMaxLength;
+        };
+        if (!isReverted()) {
+          await new Promise<void>((resolve, reject) => {
+            const timeout = window.setTimeout(() => {
+              unsubscribe();
+              reject(new Error("Revert timed out before resend."));
+            }, 8000);
+            const unsubscribe = useStore.subscribe(() => {
+              if (isReverted()) {
+                window.clearTimeout(timeout);
+                unsubscribe();
+                resolve();
+              }
+            });
+          });
+        }
+
+        await input.api.orchestration.dispatchCommand({
+          type: "thread.turn.start",
+          commandId: newCommandId(),
+          threadId: input.threadId,
+          message: {
+            messageId: newMessageId(),
+            role: "user",
+            text: input.newText,
+            // See revert/retry note: stored attachments lack the
+            // dataUrl that the upload-shaped dispatch needs, so the MVP
+            // re-sends text-only and surfaces a hint.
+            attachments: [],
+          },
+          modelSelection: composerRef.current?.getSendContext()?.selectedModelSelection,
+          runtimeMode: runtimeModeRef.current,
+          interactionMode: interactionModeRef.current,
+          createdAt: new Date().toISOString(),
+        });
+
+        if (input.hadAttachments) {
+          setThreadError(
+            input.threadId,
+            "Resent without the original attachments — re-attach them manually if you want to include them.",
+          );
+        }
+      } catch (err) {
+        setThreadError(
+          input.threadId,
+          err instanceof Error ? err.message : "Failed to resend message.",
+        );
+      } finally {
+        setIsRevertingCheckpoint(false);
+      }
+    },
+    [environmentId, setThreadError, composerRef],
+  );
+
+  const onRetryFromAssistantMessage = useCallback(
+    (assistantMessageId: MessageId) => {
+      void (async () => {
+        const api = readEnvironmentApi(environmentId);
+        if (!api || !activeThread) return;
+        if (isRevertingCheckpointRef.current || isWorkingRef.current) return;
+
+        // Find the user message that produced this assistant turn — same
+        // turnId, role "user", earlier in the timeline.
+        const messages = activeThread.messages;
+        const assistantIdx = messages.findIndex((m) => m.id === assistantMessageId);
+        if (assistantIdx < 1) return;
+        const assistantTurnId = messages[assistantIdx]?.turnId;
+        let userMessage: (typeof messages)[number] | undefined;
+        for (let i = assistantIdx - 1; i >= 0; i -= 1) {
+          const m = messages[i];
+          if (m && m.role === "user" && m.turnId === assistantTurnId) {
+            userMessage = m;
+            break;
+          }
+        }
+        if (!userMessage) return;
+
+        const targetTurnCount = revertTurnCountRef.current.get(userMessage.id);
+        if (typeof targetTurnCount !== "number") return;
+
+        await revertAndResend({
+          api,
+          threadId: activeThread.id,
+          targetTurnCount,
+          expectedMaxLength: assistantIdx,
+          newText: userMessage.text,
+          hadAttachments: (userMessage.attachments ?? []).length > 0,
+        });
+      })();
+    },
+    [activeThread, environmentId, revertAndResend],
+  );
+
+  const onEditUserMessage = useCallback(
+    (userMessageId: MessageId, newText: string) => {
+      void (async () => {
+        const api = readEnvironmentApi(environmentId);
+        if (!api || !activeThread) return;
+        if (isRevertingCheckpointRef.current || isWorkingRef.current) return;
+
+        const trimmed = newText.trim();
+        if (trimmed.length === 0) return;
+
+        const messages = activeThread.messages;
+        const userIdx = messages.findIndex((m) => m.id === userMessageId);
+        if (userIdx < 0) return;
+        const userMessage = messages[userIdx];
+        if (!userMessage || userMessage.role !== "user") return;
+
+        const targetTurnCount = revertTurnCountRef.current.get(userMessageId);
+        if (typeof targetTurnCount !== "number") return;
+
+        await revertAndResend({
+          api,
+          threadId: activeThread.id,
+          targetTurnCount,
+          expectedMaxLength: userIdx,
+          newText: trimmed,
+          hadAttachments: (userMessage.attachments ?? []).length > 0,
+        });
+      })();
+    },
+    [activeThread, environmentId, revertAndResend],
+  );
+
+  const [isForking, setIsForking] = useState(false);
+  const onForkThread = useCallback(() => {
+    void (async () => {
+      const api = readEnvironmentApi(environmentId);
+      if (!api || !activeThread || isForking) return;
+      // Forking a local-draft thread doesn't make sense — there's nothing
+      // server-side to copy yet.
+      if (!isServerThread) return;
+      setIsForking(true);
+      try {
+        const forkedThreadId = newThreadId();
+        const sourceTitle = activeThread.title?.trim() ?? "";
+        const newTitle = sourceTitle.length > 0 ? `${sourceTitle} (fork)` : "Forked thread";
+        await api.orchestration.dispatchCommand({
+          type: "thread.fork",
+          commandId: newCommandId(),
+          sourceThreadId: activeThread.id,
+          newThreadId: forkedThreadId,
+          title: newTitle,
+          createdAt: new Date().toISOString(),
+        });
+        await navigate({
+          to: "/$environmentId/$threadId",
+          params: buildThreadRouteParams(
+            scopeThreadRef(activeThread.environmentId, forkedThreadId),
+          ),
+        });
+      } catch (err) {
+        setThreadError(
+          activeThread.id,
+          err instanceof Error ? err.message : "Failed to fork thread.",
+        );
+      } finally {
+        setIsForking(false);
+      }
+    })();
+  }, [activeThread, environmentId, isForking, isServerThread, navigate, setThreadError]);
+
   // Empty state: no active thread
   if (!activeThread) {
     return <NoActiveThreadState />;
@@ -1697,6 +1900,20 @@ export default function ChatView(props: ChatViewProps) {
         title={activeThread.title || "New design"}
         subtitle={activeProject?.name ?? undefined}
         statusTone={isWorking ? "brand" : "brand-alt"}
+        trailing={
+          isServerThread ? (
+            <button
+              type="button"
+              onClick={onForkThread}
+              disabled={isForking}
+              aria-label="Fork thread"
+              title="Fork thread — copy this conversation into a new thread"
+              className="inline-flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <GitBranchIcon className="size-4" />
+            </button>
+          ) : undefined
+        }
       />
 
       {/* Error banner */}
@@ -1735,6 +1952,8 @@ export default function ChatView(props: ChatViewProps) {
               onOpenTurnDiff={onOpenTurnDiff}
               revertTurnCountByUserMessageId={revertTurnCountByUserMessageId}
               onRevertUserMessage={onRevertUserMessage}
+              onRetryFromAssistantMessage={onRetryFromAssistantMessage}
+              onEditUserMessage={onEditUserMessage}
               isRevertingCheckpoint={isRevertingCheckpoint}
               onImageExpand={onExpandTimelineImage}
               markdownCwd={gitCwd ?? undefined}
