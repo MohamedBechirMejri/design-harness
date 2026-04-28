@@ -16,114 +16,31 @@ import type { DesignPreviewEntry, EnvironmentId, ThreadId } from "@dh/contracts"
 import { ScrollArea } from "./ui/scroll-area";
 import { cn } from "~/lib/utils";
 import { readEnvironmentApi } from "~/environmentApi";
+import { resolvePrimaryEnvironmentHttpUrl } from "~/environments/primary";
 
 const POLL_INTERVAL_MS = 2000;
 const EMPTY_ENTRIES: ReadonlyArray<DesignPreviewEntry> = [];
-const EMPTY_ASSET_MAP: ReadonlyMap<string, string> = new Map();
 
-// CSS/JS sibling assets need inlining because the iframe renders via
-// `srcDoc` at `about:srcdoc`, which has no usable base URL for relative
-// fetches. We rewrite each `<script src="…">` to an inline `<script>`,
-// preserving `type` (including `type="module"`) and other attributes — so
-// modular React-via-htm designs work the same as plain JS.
-const INLINABLE_ASSET_RE = /\.(css|js|mjs|cjs)$/i;
+const DESIGN_PREVIEW_ROUTE_PREFIX = "/api/design-preview";
 
-function isInlinableAssetPath(path: string): boolean {
-  return INLINABLE_ASSET_RE.test(path);
-}
-
-function normalizeRelativeAssetPath(input: string): string | null {
-  const trimmed = input.trim();
-  if (!trimmed) return null;
-  // External or absolute references — leave them alone.
-  if (
-    /^[a-z][a-z0-9+\-.]*:/i.test(trimmed) ||
-    trimmed.startsWith("//") ||
-    trimmed.startsWith("/") ||
-    trimmed.startsWith("#") ||
-    trimmed.startsWith("data:") ||
-    trimmed.startsWith("blob:")
-  ) {
-    return null;
-  }
-  // Strip query/hash so we can match against the asset map keys.
-  const withoutQuery = trimmed.replace(/[?#].*$/, "");
-  if (withoutQuery.startsWith("./")) return withoutQuery.slice(2);
-  return withoutQuery;
-}
-
-function escapeHtml(input: string): string {
-  return input.replace(/[&<>"']/g, (c) =>
-    c === "&" ? "&amp;" : c === "<" ? "&lt;" : c === ">" ? "&gt;" : c === '"' ? "&quot;" : "&#39;",
-  );
-}
-
-function escapeStyleContents(input: string): string {
-  // Avoid breaking out of the <style> tag inside the iframe's srcdoc.
-  return input.replace(/<\/style/gi, "<\\/style");
-}
-
-function escapeScriptContents(input: string): string {
-  return input.replace(/<\/script/gi, "<\\/script");
-}
-
-/**
- * Rewrite local `<link rel="stylesheet">` and `<script src="…">` references
- * in an HTML document so the iframe (rendered via `srcDoc`, which has no
- * usable base URL) can still load the design's sibling assets.
- *
- * - CSS: replaced with `<style>…</style>` containing the file contents.
- * - JS:  replaced with `<script>…</script>` (preserving `type` and `defer`).
- * - Anything we can't resolve (external URLs, missing files, images we
- *   don't have bytes for) is left untouched.
- */
-function inlineLocalAssets(input: {
-  html: string;
-  htmlPath: string;
-  assets: ReadonlyMap<string, string>;
+// Build the iframe URL for a given file. The route serves files directly
+// from `${cwd}/.dh/design/${threadId}/`, transforming .ts/.tsx/.jsx through
+// esbuild on the fly. cwd is encodeURIComponent-ed into a single path
+// segment so relative ESM imports inside modules resolve correctly: a
+// module loaded at /api/design-preview/<cwd>/<thread>/App.tsx that imports
+// './Hero.tsx' just fetches the sibling URL.
+function buildDesignPreviewUrl(input: {
+  cwd: string;
+  threadId: ThreadId;
+  relativePath: string;
+  cacheBustMs: number;
 }): string {
-  if (input.assets.size === 0) return input.html;
-
-  const linkPattern = /<link\b([^>]*)>/gi;
-  const scriptPattern = /<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi;
-
-  const lookup = (rawPath: string): string | null => {
-    const normalized = normalizeRelativeAssetPath(rawPath);
-    if (!normalized) return null;
-    return input.assets.get(normalized) ?? null;
-  };
-
-  let html = input.html.replace(linkPattern, (match, attrs: string) => {
-    const isStylesheet = /\brel\s*=\s*["']?stylesheet["']?/i.test(attrs);
-    if (!isStylesheet) return match;
-    const hrefMatch = /\bhref\s*=\s*("([^"]*)"|'([^']*)'|([^\s>]+))/i.exec(attrs);
-    const href = hrefMatch?.[2] ?? hrefMatch?.[3] ?? hrefMatch?.[4];
-    if (!href) return match;
-    const contents = lookup(href);
-    if (contents === null) return match;
-    return `<style data-design-source="${escapeHtml(href)}">${escapeStyleContents(contents)}</style>`;
-  });
-
-  html = html.replace(scriptPattern, (match, attrs: string, body: string) => {
-    const srcMatch = /\bsrc\s*=\s*("([^"]*)"|'([^']*)'|([^\s>]+))/i.exec(attrs);
-    if (!srcMatch) return match;
-    const src = srcMatch[2] ?? srcMatch[3] ?? srcMatch[4];
-    if (!src) return match;
-    const contents = lookup(src);
-    if (contents === null) return match;
-    // Preserve type and defer/async/module attributes by reusing the original
-    // attrs but stripping the `src=` clause. Inlined module scripts still need
-    // `type="module"` to evaluate as ESM.
-    const cleaned = attrs
-      .replace(/\bsrc\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/i, "")
-      .replace(/\s+/g, " ")
-      .trim();
-    const attrPrefix = cleaned.length > 0 ? ` ${cleaned}` : "";
-    return `<script${attrPrefix} data-design-source="${escapeHtml(src)}">${escapeScriptContents(contents)}${body ?? ""}</script>`;
-  });
-
-  return html;
+  const pathname =
+    `${DESIGN_PREVIEW_ROUTE_PREFIX}/${encodeURIComponent(input.cwd)}` +
+    `/${input.threadId}/${input.relativePath}`;
+  return resolvePrimaryEnvironmentHttpUrl(pathname, { t: String(input.cacheBustMs) });
 }
+
 const VIEWPORT_STORAGE_KEY = "dh:design-preview:viewport";
 
 function readPersistedViewport(): ViewportPreset {
@@ -267,78 +184,29 @@ const DesignPreviewSidebar = memo(function DesignPreviewSidebar({
   const selectedIsHtml = selectedPath ? isHtmlFile(selectedPath) : false;
   const hasEntries = entries.length > 0;
 
-  // When an HTML file is selected, fetch its sibling CSS/JS assets so we can
-  // inline them. Iframe `srcDoc` lives at `about:srcdoc` which has no useful
-  // base URL, so `<link href="styles.css">` and `<script src="app.js">` 404
-  // unless we either inline the bytes or rewrite them to blob: URLs.
-  const inlinableAssetEntries = useMemo(
-    () =>
-      selectedIsHtml
-        ? entries.filter((entry) => isInlinableAssetPath(entry.relativePath))
-        : EMPTY_ENTRIES,
-    [entries, selectedIsHtml],
+  // Cache-bust the iframe whenever any design file changes — not just the
+  // selected one — so an edit to `components/Hero.tsx` reloads the preview
+  // even though the iframe is pointed at `index.html`.
+  const latestModifiedMs = useMemo(
+    () => entries.reduce((acc, entry) => Math.max(acc, entry.modifiedAtMs ?? 0), 0),
+    [entries],
   );
-  const inlinableAssetSignature = useMemo(
-    () =>
-      inlinableAssetEntries
-        .map((entry) => `${entry.relativePath}:${entry.modifiedAtMs ?? 0}`)
-        .join("|"),
-    [inlinableAssetEntries],
-  );
-  const assetsQuery = useQuery({
-    queryKey: [
-      "designPreviewAssets",
-      environmentId,
-      workspaceRoot,
+
+  const previewUrl = useMemo(() => {
+    if (!selectedIsHtml || !workspaceRoot || !selectedPath) return null;
+    return buildDesignPreviewUrl({
+      cwd: workspaceRoot,
       threadId,
-      inlinableAssetSignature,
-    ],
-    enabled: Boolean(workspaceRoot && selectedIsHtml && inlinableAssetEntries.length > 0),
-    queryFn: async (): Promise<ReadonlyMap<string, string>> => {
-      if (!workspaceRoot) return EMPTY_ASSET_MAP;
-      const api = readEnvironmentApi(environmentId);
-      if (!api) return EMPTY_ASSET_MAP;
-      const settled = await Promise.all(
-        inlinableAssetEntries.map(async (entry) => {
-          try {
-            const result = await api.designPreview.read({
-              cwd: workspaceRoot,
-              threadId,
-              relativePath: entry.relativePath,
-            });
-            return [entry.relativePath, result.contents] as const;
-          } catch {
-            return null;
-          }
-        }),
-      );
-      const map = new Map<string, string>();
-      for (const pair of settled) {
-        if (pair) map.set(pair[0], pair[1]);
-      }
-      return map;
-    },
-  });
-  const inlinedAssets = assetsQuery.data ?? EMPTY_ASSET_MAP;
-
-  const renderedContents = useMemo(() => {
-    if (!selectedIsHtml || !contents) return contents;
-    return inlineLocalAssets({
-      html: contents,
-      htmlPath: selectedPath ?? "",
-      assets: inlinedAssets,
+      relativePath: selectedPath,
+      cacheBustMs: latestModifiedMs,
     });
-  }, [contents, inlinedAssets, selectedIsHtml, selectedPath]);
+  }, [selectedIsHtml, workspaceRoot, selectedPath, threadId, latestModifiedMs]);
 
-  const openInNewTab =
-    selectedIsHtml && renderedContents
-      ? () => {
-          const blob = new Blob([renderedContents], { type: "text/html" });
-          const url = URL.createObjectURL(blob);
-          window.open(url, "_blank", "noopener,noreferrer");
-          setTimeout(() => URL.revokeObjectURL(url), 60_000);
-        }
-      : null;
+  const openInNewTab = previewUrl
+    ? () => {
+        window.open(previewUrl, "_blank", "noopener,noreferrer");
+      }
+    : null;
 
   const showViewportControls = selectedIsHtml && view === "preview" && hasEntries;
   const viewportWidth = viewport === "auto" ? null : VIEWPORT_WIDTHS[viewport];
@@ -375,23 +243,24 @@ const DesignPreviewSidebar = memo(function DesignPreviewSidebar({
   }, [viewportWidth, frameWidth]);
 
   // Brief "just updated" highlight whenever the iframe content reloads.
-  const lastModifiedAtMs = selectedEntry?.modifiedAtMs ?? 0;
+  // Iframe reloads on any file change (cache-bust keys off latestModifiedMs),
+  // so flash on the same signal.
   const [flashKey, setFlashKey] = useState(0);
   const previousModifiedRef = useRef<number>(0);
   useEffect(() => {
-    if (lastModifiedAtMs === 0) {
+    if (latestModifiedMs === 0) {
       previousModifiedRef.current = 0;
       return;
     }
     if (previousModifiedRef.current === 0) {
-      previousModifiedRef.current = lastModifiedAtMs;
+      previousModifiedRef.current = latestModifiedMs;
       return;
     }
-    if (previousModifiedRef.current !== lastModifiedAtMs) {
-      previousModifiedRef.current = lastModifiedAtMs;
+    if (previousModifiedRef.current !== latestModifiedMs) {
+      previousModifiedRef.current = latestModifiedMs;
       setFlashKey((k) => k + 1);
     }
-  }, [lastModifiedAtMs]);
+  }, [latestModifiedMs]);
   const copySource = useCallback(() => {
     if (!contents) return;
     void navigator.clipboard
@@ -549,10 +418,15 @@ const DesignPreviewSidebar = memo(function DesignPreviewSidebar({
               }
             >
               <iframe
-                key={`${selectedPath}:${lastModifiedAtMs}`}
+                key={`${selectedPath}:${latestModifiedMs}`}
                 title={`Preview of ${selectedPath}`}
-                sandbox="allow-scripts allow-forms allow-popups"
-                srcDoc={renderedContents}
+                // allow-same-origin is required so module fetches from
+                // /api/design-preview/* send the auth cookie. The preview
+                // content is our own server's output (LLM-authored design
+                // files served from disk), not arbitrary third-party HTML.
+                // oxlint-disable-next-line iframe-missing-sandbox
+                sandbox="allow-scripts allow-forms allow-popups allow-same-origin"
+                src={previewUrl ?? undefined}
                 className="border-0 bg-white"
                 style={
                   viewportWidth === null
