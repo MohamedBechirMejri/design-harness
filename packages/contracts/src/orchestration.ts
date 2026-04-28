@@ -589,6 +589,22 @@ const ThreadSessionStopCommand = Schema.Struct({
   createdAt: IsoDateTime,
 });
 
+// Fork an existing thread into a new one, copying its messages so the user
+// can keep editing their previous work in a separate timeline. The source
+// thread is left untouched. The new thread has no SDK resume cursor — its
+// first message starts a fresh provider session — but the visible chat
+// history from the source is duplicated into the projection so the model
+// has it as context (re-sent through the new SDK session on first turn,
+// up to the harness to surface).
+const ThreadForkCommand = Schema.Struct({
+  type: Schema.Literal("thread.fork"),
+  commandId: CommandId,
+  sourceThreadId: ThreadId,
+  newThreadId: ThreadId,
+  title: TrimmedNonEmptyString,
+  createdAt: IsoDateTime,
+});
+
 const DispatchableClientOrchestrationCommand = Schema.Union([
   ProjectCreateCommand,
   ProjectMetaUpdateCommand,
@@ -606,6 +622,7 @@ const DispatchableClientOrchestrationCommand = Schema.Union([
   ThreadUserInputRespondCommand,
   ThreadCheckpointRevertCommand,
   ThreadSessionStopCommand,
+  ThreadForkCommand,
 ]);
 export type DispatchableClientOrchestrationCommand =
   typeof DispatchableClientOrchestrationCommand.Type;
@@ -627,6 +644,7 @@ export const ClientOrchestrationCommand = Schema.Union([
   ThreadUserInputRespondCommand,
   ThreadCheckpointRevertCommand,
   ThreadSessionStopCommand,
+  ThreadForkCommand,
 ]);
 export type ClientOrchestrationCommand = typeof ClientOrchestrationCommand.Type;
 
@@ -730,6 +748,7 @@ export const OrchestrationEventType = Schema.Literals([
   "thread.user-input-response-requested",
   "thread.checkpoint-revert-requested",
   "thread.reverted",
+  "thread.forked",
   "thread.session-stop-requested",
   "thread.session-set",
   "thread.proposed-plan-upserted",
@@ -878,6 +897,12 @@ export const ThreadRevertedPayload = Schema.Struct({
   turnCount: NonNegativeInt,
 });
 
+export const ThreadForkedPayload = Schema.Struct({
+  sourceThreadId: ThreadId,
+  newThreadId: ThreadId,
+  createdAt: IsoDateTime,
+});
+
 export const ThreadSessionStopRequestedPayload = Schema.Struct({
   threadId: ThreadId,
   createdAt: IsoDateTime,
@@ -1015,6 +1040,11 @@ export const OrchestrationEvent = Schema.Union([
     ...EventBaseFields,
     type: Schema.Literal("thread.reverted"),
     payload: ThreadRevertedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("thread.forked"),
+    payload: ThreadForkedPayload,
   }),
   Schema.Struct({
     ...EventBaseFields,

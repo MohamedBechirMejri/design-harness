@@ -68,10 +68,11 @@ import { useCommandPaletteStore } from "../commandPaletteStore";
 import { resolveShortcutCommand } from "../keybindings";
 import DesignPreviewSidebar from "./DesignPreviewSidebar";
 import { AppTopBar } from "./AppTopBar";
-import { ChevronDownIcon } from "lucide-react";
+import { ChevronDownIcon, GitBranchIcon } from "lucide-react";
 import { cn, randomUUID } from "~/lib/utils";
 import { toastManager } from "./ui/toast";
 import { newCommandId, newMessageId, newThreadId } from "~/lib/utils";
+import { buildThreadRouteParams } from "../threadRoutes";
 import { getProviderModelCapabilities, resolveSelectableProvider } from "../providerModels";
 import { useSettings } from "../hooks/useSettings";
 import { resolveAppModelSelection } from "../modelSelection";
@@ -1799,6 +1800,44 @@ export default function ChatView(props: ChatViewProps) {
     [activeThread, environmentId, setThreadError],
   );
 
+  const [isForking, setIsForking] = useState(false);
+  const onForkThread = useCallback(() => {
+    void (async () => {
+      const api = readEnvironmentApi(environmentId);
+      if (!api || !activeThread || isForking) return;
+      // Forking a local-draft thread doesn't make sense — there's nothing
+      // server-side to copy yet.
+      if (!isServerThread) return;
+      setIsForking(true);
+      try {
+        const forkedThreadId = newThreadId();
+        const sourceTitle = activeThread.title?.trim() ?? "";
+        const newTitle = sourceTitle.length > 0 ? `${sourceTitle} (fork)` : "Forked thread";
+        await api.orchestration.dispatchCommand({
+          type: "thread.fork",
+          commandId: newCommandId(),
+          sourceThreadId: activeThread.id,
+          newThreadId: forkedThreadId,
+          title: newTitle,
+          createdAt: new Date().toISOString(),
+        });
+        await navigate({
+          to: "/$environmentId/$threadId",
+          params: buildThreadRouteParams(
+            scopeThreadRef(activeThread.environmentId, forkedThreadId),
+          ),
+        });
+      } catch (err) {
+        setThreadError(
+          activeThread.id,
+          err instanceof Error ? err.message : "Failed to fork thread.",
+        );
+      } finally {
+        setIsForking(false);
+      }
+    })();
+  }, [activeThread, environmentId, isForking, isServerThread, navigate, setThreadError]);
+
   // Empty state: no active thread
   if (!activeThread) {
     return <NoActiveThreadState />;
@@ -1812,6 +1851,20 @@ export default function ChatView(props: ChatViewProps) {
         title={activeThread.title || "New design"}
         subtitle={activeProject?.name ?? undefined}
         statusTone={isWorking ? "brand" : "brand-alt"}
+        trailing={
+          isServerThread ? (
+            <button
+              type="button"
+              onClick={onForkThread}
+              disabled={isForking}
+              aria-label="Fork thread"
+              title="Fork thread — copy this conversation into a new thread"
+              className="inline-flex size-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <GitBranchIcon className="size-4" />
+            </button>
+          ) : undefined
+        }
       />
 
       {/* Error banner */}

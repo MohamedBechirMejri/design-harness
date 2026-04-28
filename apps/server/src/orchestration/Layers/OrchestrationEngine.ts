@@ -62,6 +62,14 @@ function commandToAggregateRef(command: OrchestrationCommand): {
         aggregateKind: "project",
         aggregateId: command.projectId,
       };
+    case "thread.fork":
+      // Fork emits events keyed off the *new* thread (the one we're
+      // creating); aggregate routing follows the same convention so the
+      // command sequencer locks the right id.
+      return {
+        aggregateKind: "thread",
+        aggregateId: command.newThreadId,
+      };
     default:
       return {
         aggregateKind: "thread",
