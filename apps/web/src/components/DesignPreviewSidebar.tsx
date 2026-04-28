@@ -21,13 +21,12 @@ const POLL_INTERVAL_MS = 2000;
 const EMPTY_ENTRIES: ReadonlyArray<DesignPreviewEntry> = [];
 const EMPTY_ASSET_MAP: ReadonlyMap<string, string> = new Map();
 
-// CSS/JS need inlining because the iframe renders via `srcDoc` at
-// `about:srcdoc`, which has no usable base URL for sibling fetches.
-// JSX/TSX are added so React-mode designs (Babel Standalone + CDN React)
-// can split components across files and still render in the iframe — we
-// rewrite their `<script type="text/babel" src="components/Foo.jsx">` tags
-// to inline scripts, preserving `type` and `data-presets` attributes.
-const INLINABLE_ASSET_RE = /\.(css|jsx|tsx|js|mjs|cjs)$/i;
+// CSS/JS sibling assets need inlining because the iframe renders via
+// `srcDoc` at `about:srcdoc`, which has no usable base URL for relative
+// fetches. We rewrite each `<script src="…">` to an inline `<script>`,
+// preserving `type` (including `type="module"`) and other attributes — so
+// modular React-via-htm designs work the same as plain JS.
+const INLINABLE_ASSET_RE = /\.(css|js|mjs|cjs)$/i;
 
 function isInlinableAssetPath(path: string): boolean {
   return INLINABLE_ASSET_RE.test(path);
