@@ -1694,6 +1694,90 @@ export default function ChatView(props: ChatViewProps) {
   isRevertingCheckpointRef.current = isRevertingCheckpoint;
   const isWorkingRef = useRef(isWorking);
   isWorkingRef.current = isWorking;
+  // Shared revert + new-turn dispatch for the retry / edit hover actions.
+  // Both rewind the thread to a turn-checkpoint then re-send a user turn
+  // — they only differ in how they pick which user message to resend and
+  // what text the new turn carries. The wait between the two dispatches
+  // is required because reactors run async after dispatchCommand returns,
+  // so without it we'd race against the SDK rollback.
+  const revertAndResend = useCallback(
+    async (input: {
+      api: NonNullable<ReturnType<typeof readEnvironmentApi>>;
+      threadId: ThreadId;
+      targetTurnCount: number;
+      expectedMaxLength: number;
+      newText: string;
+      hadAttachments: boolean;
+    }) => {
+      setThreadError(input.threadId, null);
+      setIsRevertingCheckpoint(true);
+      try {
+        await input.api.orchestration.dispatchCommand({
+          type: "thread.checkpoint.revert",
+          commandId: newCommandId(),
+          threadId: input.threadId,
+          turnCount: input.targetTurnCount,
+          createdAt: new Date().toISOString(),
+        });
+
+        const messageRef = { environmentId, threadId: input.threadId } as const;
+        const isReverted = (): boolean => {
+          const thread = selectThreadByRef(useStore.getState(), messageRef);
+          return (thread?.messages.length ?? Infinity) <= input.expectedMaxLength;
+        };
+        if (!isReverted()) {
+          await new Promise<void>((resolve, reject) => {
+            const timeout = window.setTimeout(() => {
+              unsubscribe();
+              reject(new Error("Revert timed out before resend."));
+            }, 8000);
+            const unsubscribe = useStore.subscribe(() => {
+              if (isReverted()) {
+                window.clearTimeout(timeout);
+                unsubscribe();
+                resolve();
+              }
+            });
+          });
+        }
+
+        await input.api.orchestration.dispatchCommand({
+          type: "thread.turn.start",
+          commandId: newCommandId(),
+          threadId: input.threadId,
+          message: {
+            messageId: newMessageId(),
+            role: "user",
+            text: input.newText,
+            // See revert/retry note: stored attachments lack the
+            // dataUrl that the upload-shaped dispatch needs, so the MVP
+            // re-sends text-only and surfaces a hint.
+            attachments: [],
+          },
+          modelSelection: composerRef.current?.getSendContext()?.selectedModelSelection,
+          runtimeMode: runtimeModeRef.current,
+          interactionMode: interactionModeRef.current,
+          createdAt: new Date().toISOString(),
+        });
+
+        if (input.hadAttachments) {
+          setThreadError(
+            input.threadId,
+            "Resent without the original attachments — re-attach them manually if you want to include them.",
+          );
+        }
+      } catch (err) {
+        setThreadError(
+          input.threadId,
+          err instanceof Error ? err.message : "Failed to resend message.",
+        );
+      } finally {
+        setIsRevertingCheckpoint(false);
+      }
+    },
+    [environmentId, setThreadError, composerRef],
+  );
+
   const onRetryFromAssistantMessage = useCallback(
     (assistantMessageId: MessageId) => {
       void (async () => {
@@ -1720,84 +1804,49 @@ export default function ChatView(props: ChatViewProps) {
         const targetTurnCount = revertTurnCountRef.current.get(userMessage.id);
         if (typeof targetTurnCount !== "number") return;
 
-        const threadIdForRetry = activeThread.id;
-        const userMessageText = userMessage.text;
-        const hadAttachments = (userMessage.attachments ?? []).length > 0;
-
-        setThreadError(threadIdForRetry, null);
-        setIsRevertingCheckpoint(true);
-        try {
-          await api.orchestration.dispatchCommand({
-            type: "thread.checkpoint.revert",
-            commandId: newCommandId(),
-            threadId: threadIdForRetry,
-            turnCount: targetTurnCount,
-            createdAt: new Date().toISOString(),
-          });
-
-          // Wait for the message projection to reflect the revert before
-          // dispatching the new turn. Reactors run async after the dispatch
-          // resolves, so without this we can race against the SDK's
-          // rollback and start a turn that mixes old and new context.
-          const messageRef = { environmentId, threadId: threadIdForRetry } as const;
-          const expectedMaxLength = assistantIdx;
-          const isReverted = (): boolean => {
-            const thread = selectThreadByRef(useStore.getState(), messageRef);
-            return (thread?.messages.length ?? Infinity) <= expectedMaxLength;
-          };
-          if (!isReverted()) {
-            await new Promise<void>((resolve, reject) => {
-              const timeout = window.setTimeout(() => {
-                unsubscribe();
-                reject(new Error("Revert timed out before retry."));
-              }, 8000);
-              const unsubscribe = useStore.subscribe(() => {
-                if (isReverted()) {
-                  window.clearTimeout(timeout);
-                  unsubscribe();
-                  resolve();
-                }
-              });
-            });
-          }
-
-          await api.orchestration.dispatchCommand({
-            type: "thread.turn.start",
-            commandId: newCommandId(),
-            threadId: threadIdForRetry,
-            message: {
-              messageId: newMessageId(),
-              role: "user",
-              text: userMessageText,
-              // Attachments on the original message are stored references
-              // (no dataUrl); the dispatch shape requires upload payloads.
-              // For the retry MVP we drop them and surface a thread error
-              // hint when present so the user can re-attach manually.
-              attachments: [],
-            },
-            modelSelection: composerRef.current?.getSendContext()?.selectedModelSelection,
-            runtimeMode: runtimeModeRef.current,
-            interactionMode: interactionModeRef.current,
-            createdAt: new Date().toISOString(),
-          });
-
-          if (hadAttachments) {
-            setThreadError(
-              threadIdForRetry,
-              "Retried without the original attachments — re-attach them manually if you want to include them.",
-            );
-          }
-        } catch (err) {
-          setThreadError(
-            threadIdForRetry,
-            err instanceof Error ? err.message : "Failed to retry from this message.",
-          );
-        } finally {
-          setIsRevertingCheckpoint(false);
-        }
+        await revertAndResend({
+          api,
+          threadId: activeThread.id,
+          targetTurnCount,
+          expectedMaxLength: assistantIdx,
+          newText: userMessage.text,
+          hadAttachments: (userMessage.attachments ?? []).length > 0,
+        });
       })();
     },
-    [activeThread, environmentId, setThreadError],
+    [activeThread, environmentId, revertAndResend],
+  );
+
+  const onEditUserMessage = useCallback(
+    (userMessageId: MessageId, newText: string) => {
+      void (async () => {
+        const api = readEnvironmentApi(environmentId);
+        if (!api || !activeThread) return;
+        if (isRevertingCheckpointRef.current || isWorkingRef.current) return;
+
+        const trimmed = newText.trim();
+        if (trimmed.length === 0) return;
+
+        const messages = activeThread.messages;
+        const userIdx = messages.findIndex((m) => m.id === userMessageId);
+        if (userIdx < 0) return;
+        const userMessage = messages[userIdx];
+        if (!userMessage || userMessage.role !== "user") return;
+
+        const targetTurnCount = revertTurnCountRef.current.get(userMessageId);
+        if (typeof targetTurnCount !== "number") return;
+
+        await revertAndResend({
+          api,
+          threadId: activeThread.id,
+          targetTurnCount,
+          expectedMaxLength: userIdx,
+          newText: trimmed,
+          hadAttachments: (userMessage.attachments ?? []).length > 0,
+        });
+      })();
+    },
+    [activeThread, environmentId, revertAndResend],
   );
 
   const [isForking, setIsForking] = useState(false);
@@ -1904,6 +1953,7 @@ export default function ChatView(props: ChatViewProps) {
               revertTurnCountByUserMessageId={revertTurnCountByUserMessageId}
               onRevertUserMessage={onRevertUserMessage}
               onRetryFromAssistantMessage={onRetryFromAssistantMessage}
+              onEditUserMessage={onEditUserMessage}
               isRevertingCheckpoint={isRevertingCheckpoint}
               onImageExpand={onExpandTimelineImage}
               markdownCwd={gitCwd ?? undefined}

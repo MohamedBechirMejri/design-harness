@@ -1,6 +1,8 @@
 import { type EnvironmentId, type MessageId, type TurnId } from "@dh/contracts";
 import {
+  type ChangeEvent,
   createContext,
+  type KeyboardEvent,
   memo,
   use,
   useCallback,
@@ -23,6 +25,7 @@ import {
   GlobeIcon,
   HammerIcon,
   type LucideIcon,
+  PencilIcon,
   RotateCcwIcon,
   SquarePenIcon,
   TerminalIcon,
@@ -85,6 +88,9 @@ interface TimelineRowSharedState {
   activeThreadEnvironmentId: EnvironmentId;
   onRevertUserMessage: (messageId: MessageId) => void;
   onRetryFromAssistantMessage: (assistantMessageId: MessageId) => void;
+  onEditUserMessage: (userMessageId: MessageId, newText: string) => void;
+  editingUserMessageId: MessageId | null;
+  setEditingUserMessageId: (next: MessageId | null) => void;
   onImageExpand: (preview: ExpandedImagePreview) => void;
   onOpenTurnDiff: (turnId: TurnId, filePath?: string) => void;
   onSubmitDesignAnswers?: (compiledText: string) => void | Promise<void>;
@@ -111,6 +117,7 @@ interface MessagesTimelineProps {
   revertTurnCountByUserMessageId: Map<MessageId, number>;
   onRevertUserMessage: (messageId: MessageId) => void;
   onRetryFromAssistantMessage: (assistantMessageId: MessageId) => void;
+  onEditUserMessage: (userMessageId: MessageId, newText: string) => void;
   isRevertingCheckpoint: boolean;
   onImageExpand: (preview: ExpandedImagePreview) => void;
   activeThreadEnvironmentId: EnvironmentId;
@@ -149,6 +156,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   revertTurnCountByUserMessageId,
   onRevertUserMessage,
   onRetryFromAssistantMessage,
+  onEditUserMessage,
   isRevertingCheckpoint,
   onImageExpand,
   activeThreadEnvironmentId,
@@ -206,6 +214,10 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     };
   }, [listRef, onIsAtEndChange, rows.length]);
 
+  // Inline-edit state lives here (UI-only, not persisted) — exactly one
+  // user message can be open in the editor at a time.
+  const [editingUserMessageId, setEditingUserMessageId] = useState<MessageId | null>(null);
+
   // Memoised context value — only changes on state transitions, NOT on
   // every streaming chunk. Callbacks from ChatView are useCallback-stable.
   const sharedState = useMemo<TimelineRowSharedState>(
@@ -223,6 +235,9 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       activeThreadEnvironmentId,
       onRevertUserMessage,
       onRetryFromAssistantMessage,
+      onEditUserMessage,
+      editingUserMessageId,
+      setEditingUserMessageId,
       onImageExpand,
       onOpenTurnDiff,
       ...(onSubmitDesignAnswers ? { onSubmitDesignAnswers } : {}),
@@ -241,6 +256,8 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       activeThreadEnvironmentId,
       onRevertUserMessage,
       onRetryFromAssistantMessage,
+      onEditUserMessage,
+      editingUserMessageId,
       onImageExpand,
       onOpenTurnDiff,
       onSubmitDesignAnswers,
@@ -344,6 +361,21 @@ function TimelineRowContent({ row }: { row: TimelineRow }) {
           const displayedUserMessage = deriveDisplayedUserMessageState(row.message.text);
           const terminalContexts = displayedUserMessage.contexts;
           const canRevertAgentWork = typeof row.revertTurnCount === "number";
+          const isEditing = ctx.editingUserMessageId === row.message.id;
+          if (isEditing) {
+            return (
+              <UserMessageEditor
+                key={`edit:${row.message.id}`}
+                initialText={displayedUserMessage.visibleText}
+                disabled={ctx.isRevertingCheckpoint || ctx.isWorking}
+                onCancel={() => ctx.setEditingUserMessageId(null)}
+                onSubmit={(nextText) => {
+                  ctx.setEditingUserMessageId(null);
+                  ctx.onEditUserMessage(row.message.id, nextText);
+                }}
+              />
+            );
+          }
           return (
             <div className="flex justify-end">
               <div className="group relative max-w-[80%] rounded-2xl rounded-br-sm border border-border bg-secondary px-4 py-3">
@@ -393,6 +425,18 @@ function TimelineRowContent({ row }: { row: TimelineRow }) {
                   <div className="flex items-center gap-1.5 opacity-0 transition-opacity duration-200 focus-within:opacity-100 group-hover:opacity-100">
                     {displayedUserMessage.copyText && (
                       <MessageCopyButton text={displayedUserMessage.copyText} />
+                    )}
+                    {canRevertAgentWork && (
+                      <Button
+                        type="button"
+                        size="xs"
+                        variant="outline"
+                        disabled={ctx.isRevertingCheckpoint || ctx.isWorking}
+                        onClick={() => ctx.setEditingUserMessageId(row.message.id)}
+                        title="Edit this message and re-send"
+                      >
+                        <PencilIcon className="size-3" />
+                      </Button>
                     )}
                     {canRevertAgentWork && (
                       <Button
@@ -1133,6 +1177,105 @@ const SimpleWorkEntryRow = memo(function SimpleWorkEntryRow(props: {
           )}
         </div>
       )}
+    </div>
+  );
+});
+
+interface UserMessageEditorProps {
+  initialText: string;
+  disabled: boolean;
+  onCancel: () => void;
+  onSubmit: (nextText: string) => void;
+}
+
+// Inline editor that replaces the user-message bubble while editing.
+// Cmd/Ctrl+Enter (or click Save) re-sends; Escape cancels. The submit
+// handler does the heavy lifting (revert + new turn) — this component
+// just owns the local text state and keyboard affordances.
+const UserMessageEditor = memo(function UserMessageEditor({
+  initialText,
+  disabled,
+  onCancel,
+  onSubmit,
+}: UserMessageEditorProps) {
+  const [text, setText] = useState(initialText);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  useEffect(() => {
+    const node = textareaRef.current;
+    if (!node) return;
+    node.focus();
+    // Place caret at end and auto-grow once on mount.
+    node.setSelectionRange(node.value.length, node.value.length);
+    node.style.height = "auto";
+    node.style.height = `${Math.min(node.scrollHeight, 320)}px`;
+  }, []);
+
+  const handleChange = useCallback((event: ChangeEvent<HTMLTextAreaElement>) => {
+    setText(event.target.value);
+    const node = event.currentTarget;
+    node.style.height = "auto";
+    node.style.height = `${Math.min(node.scrollHeight, 320)}px`;
+  }, []);
+
+  const submit = useCallback(() => {
+    const trimmed = text.trim();
+    if (trimmed.length === 0 || disabled) return;
+    onSubmit(trimmed);
+  }, [text, disabled, onSubmit]);
+
+  const handleKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLTextAreaElement>) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onCancel();
+        return;
+      }
+      if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+        event.preventDefault();
+        submit();
+      }
+    },
+    [onCancel, submit],
+  );
+
+  const trimmedLength = text.trim().length;
+  const canSubmit = trimmedLength > 0 && !disabled;
+
+  return (
+    <div className="flex justify-end">
+      <div className="flex w-full max-w-[80%] flex-col gap-2 rounded-2xl rounded-br-sm border border-brand/40 bg-secondary px-4 py-3 shadow-soft">
+        <textarea
+          ref={textareaRef}
+          value={text}
+          onChange={handleChange}
+          onKeyDown={handleKeyDown}
+          disabled={disabled}
+          rows={2}
+          className="min-h-[44px] w-full resize-none bg-transparent text-[14px] leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/50"
+          placeholder="Edit your message…"
+        />
+        <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground/60">
+          <span>
+            <kbd className="rounded border border-border bg-background px-1 py-0.5 font-mono text-[10px]">
+              ⌘↵
+            </kbd>{" "}
+            send ·{" "}
+            <kbd className="rounded border border-border bg-background px-1 py-0.5 font-mono text-[10px]">
+              esc
+            </kbd>{" "}
+            cancel
+          </span>
+          <div className="flex items-center gap-1.5">
+            <Button type="button" size="xs" variant="ghost" onClick={onCancel} disabled={disabled}>
+              Cancel
+            </Button>
+            <Button type="button" size="xs" onClick={submit} disabled={!canSubmit}>
+              Save & resend
+            </Button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 });
