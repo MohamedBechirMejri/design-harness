@@ -572,20 +572,22 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         command,
         threadId: command.sourceThreadId,
       });
-      // Fork is implemented as a self-contained event sequence:
-      //   1. thread.created   — new thread shell, copying source's
-      //      project / model / runtime mode / interaction mode / branch.
-      //   2. thread.message-sent × N — one per source message, with
-      //      freshly minted messageIds (the projection schema requires a
-      //      globally unique message_id PK) but reusing each source
-      //      message's turnId (projection_turns is keyed on
-      //      (thread_id, turn_id), so collisions don't happen).
-      //   3. thread.forked    — marker so the client can navigate /
-      //      record analytics; carries no message payload.
-      //
-      // Emitting concrete thread.message-sent events keeps the in-memory
-      // read model, the sqlite projection, and the client store all in
-      // sync without a custom copy code path on each side.
+      // Determine the cutoff. If atMessageId is set, only copy messages
+      // with createdAt <= the target's createdAt (the target itself is
+      // included in the fork). Otherwise copy the whole conversation.
+      const cutoffCreatedAt = command.atMessageId
+        ? sourceThread.messages.find((m) => m.id === command.atMessageId)?.createdAt
+        : undefined;
+      if (command.atMessageId && cutoffCreatedAt === undefined) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Fork target message '${command.atMessageId}' is not present in thread '${command.sourceThreadId}'.`,
+        });
+      }
+      const messagesToCopy =
+        cutoffCreatedAt !== undefined
+          ? sourceThread.messages.filter((m) => m.createdAt <= cutoffCreatedAt)
+          : sourceThread.messages;
       const createdEvent = {
         ...withEventBase({
           aggregateKind: "thread" as const,
@@ -607,7 +609,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           updatedAt: command.createdAt,
         },
       };
-      const messageEvents = sourceThread.messages.map((message) => ({
+      const messageEvents = messagesToCopy.map((message) => ({
         ...withEventBase({
           aggregateKind: "thread" as const,
           aggregateId: command.newThreadId,
@@ -642,6 +644,46 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         },
       };
       return [createdEvent, ...messageEvents, forkedEvent];
+    }
+
+    case "thread.rewind": {
+      const thread = yield* requireThread({
+        readModel,
+        command,
+        threadId: command.threadId,
+      });
+      const target = thread.messages.find((m) => m.id === command.beforeMessageId);
+      if (!target) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Rewind target message '${command.beforeMessageId}' is not present in thread '${command.threadId}'.`,
+        });
+      }
+      // Count distinct turnIds for messages being dropped (createdAt >=
+      // cutoff). The SDK reacts on the thread.rewound event by rolling
+      // back its in-memory turn stack by exactly this many turns; if the
+      // count is wrong the SDK and the projection drift apart.
+      const cutoff = target.createdAt;
+      const droppedTurnIds = new Set<string>();
+      for (const m of thread.messages) {
+        if (m.createdAt < cutoff) continue;
+        if (m.turnId) droppedTurnIds.add(m.turnId);
+      }
+      return {
+        ...withEventBase({
+          aggregateKind: "thread" as const,
+          aggregateId: command.threadId,
+          occurredAt: command.createdAt,
+          commandId: command.commandId,
+        }),
+        type: "thread.rewound" as const,
+        payload: {
+          threadId: command.threadId,
+          beforeMessageId: command.beforeMessageId,
+          beforeCreatedAt: cutoff,
+          numTurnsDropped: droppedTurnIds.size,
+        },
+      };
     }
 
     case "thread.session.set": {

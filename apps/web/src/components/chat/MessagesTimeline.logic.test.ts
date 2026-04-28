@@ -254,7 +254,6 @@ describe("deriveMessagesTimelineRows", () => {
       isWorking: false,
       activeTurnStartedAt: null,
       turnDiffSummaryByAssistantMessageId: new Map(),
-      revertTurnCountByUserMessageId: new Map(),
     });
 
     const assistantRows = rows.filter(
@@ -287,7 +286,7 @@ describe("deriveMessagesTimelineRows", () => {
             id: "user-1" as never,
             role: "user",
             text: "Do the thing",
-            turnId: null,
+            turnId: "turn-1" as never,
             createdAt: "2026-01-01T00:00:00Z",
             streaming: false,
           },
@@ -313,7 +312,6 @@ describe("deriveMessagesTimelineRows", () => {
       turnDiffSummaryByAssistantMessageId: new Map([
         ["assistant-1" as never, assistantTurnDiffSummary],
       ]),
-      revertTurnCountByUserMessageId: new Map([["user-1" as never, 1]]),
     });
 
     const userRow = rows.find(
@@ -325,7 +323,7 @@ describe("deriveMessagesTimelineRows", () => {
         row.kind === "message" && row.message.role === "assistant",
     );
 
-    expect(userRow?.revertTurnCount).toBe(1);
+    expect(userRow?.canRewind).toBe(true);
     expect(assistantRow?.assistantTurnDiffSummary).toBe(assistantTurnDiffSummary);
   });
 });
@@ -368,7 +366,6 @@ describe("computeStableMessagesTimelineRows", () => {
       isWorking: false,
       activeTurnStartedAt: null,
       turnDiffSummaryByAssistantMessageId: new Map(),
-      revertTurnCountByUserMessageId: new Map(),
     });
 
     const initial = computeStableMessagesTimelineRows(rows, {
@@ -419,7 +416,6 @@ describe("computeStableMessagesTimelineRows", () => {
       isWorking: false,
       activeTurnStartedAt: null,
       turnDiffSummaryByAssistantMessageId: new Map(),
-      revertTurnCountByUserMessageId: new Map(),
     });
 
     const initial = computeStableMessagesTimelineRows(firstRows, {

@@ -596,12 +596,30 @@ const ThreadSessionStopCommand = Schema.Struct({
 // history from the source is duplicated into the projection so the model
 // has it as context (re-sent through the new SDK session on first turn,
 // up to the harness to surface).
+//
+// `atMessageId` is optional: if set, only messages with createdAt <= the
+// target's createdAt are copied into the new thread (i.e. fork up to and
+// including that message). If unset, the entire conversation is copied.
 const ThreadForkCommand = Schema.Struct({
   type: Schema.Literal("thread.fork"),
   commandId: CommandId,
   sourceThreadId: ThreadId,
   newThreadId: ThreadId,
   title: TrimmedNonEmptyString,
+  atMessageId: Schema.optional(MessageId),
+  createdAt: IsoDateTime,
+});
+
+// Truncate a thread's conversation at a specific message — the message
+// itself and everything after it are dropped from the visible projection,
+// and the SDK's running session is rolled back the same number of turns
+// so the next user turn boots fresh. Pure chat-state operation: does not
+// touch the filesystem, does not depend on git checkpoints.
+const ThreadRewindCommand = Schema.Struct({
+  type: Schema.Literal("thread.rewind"),
+  commandId: CommandId,
+  threadId: ThreadId,
+  beforeMessageId: MessageId,
   createdAt: IsoDateTime,
 });
 
@@ -623,6 +641,7 @@ const DispatchableClientOrchestrationCommand = Schema.Union([
   ThreadCheckpointRevertCommand,
   ThreadSessionStopCommand,
   ThreadForkCommand,
+  ThreadRewindCommand,
 ]);
 export type DispatchableClientOrchestrationCommand =
   typeof DispatchableClientOrchestrationCommand.Type;
@@ -645,6 +664,7 @@ export const ClientOrchestrationCommand = Schema.Union([
   ThreadCheckpointRevertCommand,
   ThreadSessionStopCommand,
   ThreadForkCommand,
+  ThreadRewindCommand,
 ]);
 export type ClientOrchestrationCommand = typeof ClientOrchestrationCommand.Type;
 
@@ -749,6 +769,7 @@ export const OrchestrationEventType = Schema.Literals([
   "thread.checkpoint-revert-requested",
   "thread.reverted",
   "thread.forked",
+  "thread.rewound",
   "thread.session-stop-requested",
   "thread.session-set",
   "thread.proposed-plan-upserted",
@@ -903,6 +924,21 @@ export const ThreadForkedPayload = Schema.Struct({
   createdAt: IsoDateTime,
 });
 
+export const ThreadRewoundPayload = Schema.Struct({
+  threadId: ThreadId,
+  // The message that the rewind targets — this message and everything
+  // after it are dropped from the projection.
+  beforeMessageId: MessageId,
+  // The createdAt of `beforeMessageId`, included on the event so projectors
+  // and the client store can drop messages by timestamp without having to
+  // re-read the source thread.
+  beforeCreatedAt: IsoDateTime,
+  // Number of distinct turns being rolled back. The reactor uses this to
+  // call providerService.rollbackConversation so the SDK's in-memory
+  // session matches the truncated projection.
+  numTurnsDropped: NonNegativeInt,
+});
+
 export const ThreadSessionStopRequestedPayload = Schema.Struct({
   threadId: ThreadId,
   createdAt: IsoDateTime,
@@ -1045,6 +1081,11 @@ export const OrchestrationEvent = Schema.Union([
     ...EventBaseFields,
     type: Schema.Literal("thread.forked"),
     payload: ThreadForkedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("thread.rewound"),
+    payload: ThreadRewoundPayload,
   }),
   Schema.Struct({
     ...EventBaseFields,

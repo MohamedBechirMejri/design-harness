@@ -27,7 +27,10 @@ export type MessagesTimelineRow =
       showCompletionDivider: boolean;
       showAssistantCopyButton: boolean;
       assistantTurnDiffSummary?: TurnDiffSummary | undefined;
-      revertTurnCount?: number | undefined;
+      // True when this is a server-anchored message that the rewind /
+      // edit / retry hover actions can target. We just need a turnId
+      // (the rewind path is messageId-based and git-free).
+      canRewind?: boolean | undefined;
       canRetry?: boolean | undefined;
     }
   | { kind: "working"; id: string; createdAt: string | null };
@@ -108,7 +111,6 @@ export function deriveMessagesTimelineRows(input: {
   isWorking: boolean;
   activeTurnStartedAt: string | null;
   turnDiffSummaryByAssistantMessageId: ReadonlyMap<MessageId, TurnDiffSummary>;
-  revertTurnCountByUserMessageId: ReadonlyMap<MessageId, number>;
 }): MessagesTimelineRow[] {
   const nextRows: MessagesTimelineRow[] = [];
   const durationStartByMessageId = computeMessageDurationStart(
@@ -116,17 +118,17 @@ export function deriveMessagesTimelineRows(input: {
   );
   const terminalAssistantMessageIds = deriveTerminalAssistantMessageIds(input.timelineEntries);
 
-  // Build a map from each turn's user message → revertTurnCount so the
-  // assistant row in the same turn knows whether retry is available
-  // (i.e. there is a checkpoint to revert to before regenerating).
-  const turnIdsWithRevertableUserMessage = new Set<string>();
+  // Track which turns have a server-anchored user message so the
+  // assistant row in the same turn knows whether retry can target it.
+  // Retry needs a user message to re-send, and a rewind primitive that
+  // can drop everything from there — both are messageId-based and don't
+  // depend on git checkpoints.
+  const turnIdsWithUserMessage = new Set<string>();
   for (const entry of input.timelineEntries) {
     if (entry.kind !== "message") continue;
     if (entry.message.role !== "user") continue;
     if (!entry.message.turnId) continue;
-    if (input.revertTurnCountByUserMessageId.has(entry.message.id)) {
-      turnIdsWithRevertableUserMessage.add(entry.message.turnId);
-    }
+    turnIdsWithUserMessage.add(entry.message.turnId);
   }
 
   for (let index = 0; index < input.timelineEntries.length; index += 1) {
@@ -176,15 +178,13 @@ export function deriveMessagesTimelineRows(input: {
         timelineEntry.message.role === "assistant"
           ? input.turnDiffSummaryByAssistantMessageId.get(timelineEntry.message.id)
           : undefined,
-      revertTurnCount:
-        timelineEntry.message.role === "user"
-          ? input.revertTurnCountByUserMessageId.get(timelineEntry.message.id)
-          : undefined,
+      canRewind:
+        timelineEntry.message.role === "user" && timelineEntry.message.turnId != null,
       canRetry:
         timelineEntry.message.role === "assistant" &&
         terminalAssistantMessageIds.has(timelineEntry.message.id) &&
         timelineEntry.message.turnId != null &&
-        turnIdsWithRevertableUserMessage.has(timelineEntry.message.turnId),
+        turnIdsWithUserMessage.has(timelineEntry.message.turnId),
     });
   }
 
@@ -238,7 +238,7 @@ function isRowUnchanged(a: MessagesTimelineRow, b: MessagesTimelineRow): boolean
         a.showCompletionDivider === bm.showCompletionDivider &&
         a.showAssistantCopyButton === bm.showAssistantCopyButton &&
         a.assistantTurnDiffSummary === bm.assistantTurnDiffSummary &&
-        a.revertTurnCount === bm.revertTurnCount &&
+        a.canRewind === bm.canRewind &&
         a.canRetry === bm.canRetry
       );
     }
